@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Alert #{{ alert.id if alert else '?' }} — NetScan{% endblock %}
+
+{% block content %}
+{% if not alert %}
+<div class="alert alert-danger">Alert not found.</div>
+{% else %}
+<a href="/" class="btn btn-outline-secondary btn-sm mb-3">← Back to Dashboard</a>
+
+<div class="card p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h4>
+                <span class="badge badge-{{ alert.severity }} me-2">{{ alert.severity }}</span>
+                {{ alert.title }}
+            </h4>
+            <p class="text-secondary mb-1">
+                <i class="bi bi-clock"></i> {{ alert.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                &nbsp;|&nbsp;
+                <i class="bi bi-pc-display"></i> <code>{{ alert.src_ip }}</code>
+                &nbsp;|&nbsp;
+                Status: <strong>{{ alert.status }}</strong>
+            </p>
+        </div>
+        <div>
+            {% if alert.status == 'open' %}
+            <button class="btn btn-sm btn-outline-warning" onclick="patchStatus({{ alert.id }}, 'acknowledged')">
+                Acknowledge
+            </button>
+            <button class="btn btn-sm btn-outline-success" onclick="patchStatus({{ alert.id }}, 'resolved')">
+                Resolve
+            </button>
+            {% elif alert.status == 'acknowledged' %}
+            <button class="btn btn-sm btn-outline-success" onclick="patchStatus({{ alert.id }}, 'resolved')">
+                Resolve
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <hr style="border-color:#30363d">
+    <p>{{ alert.summary }}</p>
+</div>
+
+<!-- Detection details -->
+{% if detection %}
+<div class="card p-4 mb-4">
+    <h5><i class="bi bi-graph-up"></i> Detection Scores</h5>
+    <div class="row mt-3">
+        <div class="col-md-3 text-center">
+            <h3>{{ '%.2f'|format(detection.rule_score) }}</h3>
+            <small class="text-secondary">Rule Score</small>
+        </div>
+        <div class="col-md-3 text-center">
+            <h3>{{ '%.2f'|format(detection.ml_score) }}</h3>
+            <small class="text-secondary">ML Score</small>
+        </div>
+        <div class="col-md-3 text-center">
+            <h3>{{ '%.2f'|format(detection.combined_risk) }}</h3>
+            <small class="text-secondary">Combined Risk</small>
+        </div>
+        <div class="col-md-3 text-center">
+            <h3>{{ detection.decision }}</h3>
+            <small class="text-secondary">Decision</small>
+        </div>
+    </div>
+    {% if detection.rule_hits %}
+    <h6 class="mt-4">Rule Hits</h6>
+    <pre style="background:#0d1117; color:#79c0ff; padding:1rem; border-radius:6px; overflow-x:auto">{{ detection.rule_hits | tojson(indent=2) }}</pre>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- AI Assessment -->
+{% if ai %}
+<div class="card p-4 mb-4">
+    <h5><i class="bi bi-robot"></i> AI Assessment (Gemini)</h5>
+    <table class="table table-sm mt-3">
+        <tr><th style="width:200px">Threat Type</th><td>{{ ai.threat_type }}</td></tr>
+        <tr><th>Severity</th><td><span class="badge badge-{{ ai.severity }}">{{ ai.severity }}</span></td></tr>
+        <tr><th>Explanation</th><td>{{ ai.explanation }}</td></tr>
+        <tr><th>Recommended Action</th><td>{{ ai.recommended_action }}</td></tr>
+    </table>
+    {% if ai.raw_response %}
+    <details class="mt-2">
+        <summary class="text-secondary" style="cursor:pointer">Raw AI Response</summary>
+        <pre style="background:#0d1117; color:#79c0ff; padding:1rem; border-radius:6px; margin-top:0.5rem; overflow-x:auto">{{ ai.raw_response | tojson(indent=2) }}</pre>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function patchStatus(id, status) {
+    fetch(`/alerts/${id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    }).then(() => location.reload());
+}
+</script>
+{% endblock %}

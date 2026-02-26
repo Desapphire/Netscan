@@ -1,0 +1,40 @@
+# Web / API
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+jinja2>=3.1
+
+# Database
+SQLAlchemy>=2.0
+
+# Data validation
+pydantic>=2.6
+
+# Config
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# HTTP client (Gemini API)
+httpx>=0.27
+
+# ML & Data
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.4
+joblib>=1.3
+
+# Network capture
+pyshark>=0.6
+scapy>=2.5
+psutil>=5.9
+
+# Logging & CLI
+rich>=13.7
+loguru>=0.7
+
+# Notifications (optional)
+requests>=2.31
+
+# Testing
+pytest>=8.0
+pytest-asyncio>=0.23

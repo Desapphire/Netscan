@@ -1,0 +1,28 @@
+rules:
+  vpn_ports_udp:
+    enabled: true
+    ports: [1194, 51820, 500, 4500]
+    score: 0.55
+    description: "Common VPN UDP ports (OpenVPN/WireGuard/IKEv2)"
+
+  torrent_ports_tcp:
+    enabled: true
+    ports: [6881, 6882, 6883, 6884, 6885, 6886, 6887, 6888, 6889, 51413]
+    score: 0.60
+    description: "Common BitTorrent ports"
+
+  restricted_domain_keywords:
+    enabled: true
+    keywords:
+      gambling: ["casino", "bet", "poker", "sportsbook"]
+      piracy: ["torrent", "pirate", "crack", "warez"]
+    score:
+      gambling: 0.70
+      piracy: 0.75
+    description: "Keyword match on observed domains (DNS/SNI/URL metadata)"
+
+  high_fanout_connections:
+    enabled: true
+    unique_dst_ip_threshold: 40
+    score: 0.45
+    description: "High number of unique destinations in a short window"

@@ -1,0 +1,81 @@
+"""Dashboard HTML routes (server-side rendered with Jinja2)."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import desc, func
+from sqlalchemy.orm import Session
+
+from app.db.db_session import SessionLocal
+from app.db.models import AIAssessment, Alert, Detection
+
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+router = APIRouter()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard(request: Request, db: Session = Depends(get_db)):
+    total_alerts = db.query(func.count(Alert.id)).scalar() or 0
+    open_alerts = db.query(func.count(Alert.id)).filter(Alert.status == "open").scalar() or 0
+    critical = db.query(func.count(Alert.id)).filter(Alert.severity == "critical").scalar() or 0
+    high = db.query(func.count(Alert.id)).filter(Alert.severity == "high").scalar() or 0
+
+    recent = (
+        db.query(Alert)
+        .order_by(desc(Alert.created_at))
+        .limit(25)
+        .all()
+    )
+
+    by_type = dict(
+        db.query(Alert.threat_type, func.count(Alert.id))
+        .group_by(Alert.threat_type)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "total_alerts": total_alerts,
+            "open_alerts": open_alerts,
+            "critical": critical,
+            "high": high,
+            "recent_alerts": recent,
+            "by_type": by_type,
+        },
+    )
+
+
+@router.get("/alert/{alert_id}", response_class=HTMLResponse)
+def alert_detail_page(alert_id: int, request: Request, db: Session = Depends(get_db)):
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    detection = None
+    ai = None
+    if alert and alert.detection_id:
+        detection = db.query(Detection).filter(Detection.id == alert.detection_id).first()
+    if alert and alert.ai_assessment_id:
+        ai = db.query(AIAssessment).filter(AIAssessment.id == alert.ai_assessment_id).first()
+
+    return templates.TemplateResponse(
+        "alert_detail.html",
+        {
+            "request": request,
+            "alert": alert,
+            "detection": detection,
+            "ai": ai,
+        },
+    )

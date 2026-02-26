@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — NetScan{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <h2>{{ total_alerts }}</h2>
+            <p class="text-secondary mb-0">Total Alerts</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <h2 class="text-warning">{{ open_alerts }}</h2>
+            <p class="text-secondary mb-0">Open Alerts</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <h2 class="text-danger">{{ critical }}</h2>
+            <p class="text-secondary mb-0">Critical</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <h2 style="color:#d29922">{{ high }}</h2>
+            <p class="text-secondary mb-0">High</p>
+        </div>
+    </div>
+</div>
+
+<!-- Charts row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h5 class="card-title">Alerts by Threat Type</h5>
+            <canvas id="threatChart" height="220"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h5 class="card-title">Severity Distribution</h5>
+            <canvas id="severityChart" height="220"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Alerts Table -->
+<div class="card p-3">
+    <h5 class="card-title mb-3"><i class="bi bi-exclamation-triangle"></i> Recent Alerts</h5>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Source IP</th>
+                    <th>Threat</th>
+                    <th>Severity</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in recent_alerts %}
+                <tr>
+                    <td>{{ a.id }}</td>
+                    <td><small>{{ a.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                    <td><code>{{ a.src_ip }}</code></td>
+                    <td>{{ a.threat_type }}</td>
+                    <td>
+                        <span class="badge badge-{{ a.severity }}">{{ a.severity }}</span>
+                    </td>
+                    <td>{{ a.title[:60] }}</td>
+                    <td>
+                        {% if a.status == 'open' %}
+                            <span class="badge bg-warning text-dark">open</span>
+                        {% elif a.status == 'acknowledged' %}
+                            <span class="badge bg-info">ack</span>
+                        {% else %}
+                            <span class="badge bg-success">resolved</span>
+                        {% endif %}
+                    </td>
+                    <td><a href="/alert/{{ a.id }}">Details →</a></td>
+                </tr>
+                {% endfor %}
+                {% if not recent_alerts %}
+                <tr><td colspan="8" class="text-center text-secondary">No alerts yet.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Threat-type pie chart
+const threatLabels = {{ by_type.keys()|list|tojson }};
+const threatData   = {{ by_type.values()|list|tojson }};
+new Chart(document.getElementById('threatChart'), {
+    type: 'doughnut',
+    data: {
+        labels: threatLabels,
+        datasets: [{
+            data: threatData,
+            backgroundColor: ['#da3633','#d29922','#388bfd','#3fb950','#8b949e','#f778ba'],
+        }]
+    },
+    options: {
+        plugins: { legend: { labels: { color: '#c9d1d9' } } },
+        responsive: true,
+    }
+});
+
+// Severity bar chart (fetch from API)
+fetch('/alerts/stats')
+    .then(r => r.json())
+    .then(data => {
+        const sevLabels = Object.keys(data.by_severity || {});
+        const sevValues = Object.values(data.by_severity || {});
+        const sevColors = sevLabels.map(s => ({
+            critical:'#da3633', high:'#d29922', medium:'#388bfd', low:'#3fb950'
+        }[s] || '#8b949e'));
+        new Chart(document.getElementById('severityChart'), {
+            type: 'bar',
+            data: {
+                labels: sevLabels,
+                datasets: [{
+                    label: 'Count',
+                    data: sevValues,
+                    backgroundColor: sevColors,
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#c9d1d9' }, grid: { color: '#21262d' } },
+                    y: { ticks: { color: '#c9d1d9' }, grid: { color: '#21262d' }, beginAtZero: true },
+                },
+                responsive: true,
+            }
+        });
+    });
+</script>
+{% endblock %}

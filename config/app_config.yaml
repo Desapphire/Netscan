@@ -1,0 +1,43 @@
+app:
+  name: "netscan"
+  window_seconds: 20
+  slide_seconds: 10
+  mode: "monitor"   # monitor | enforce
+
+db:
+  url: "sqlite:///./netscan.db"
+
+detection:
+  rule_weight: 0.65
+  ml_weight: 0.35
+  block_threshold: 0.85
+  alert_threshold: 0.50
+  ai_review_low: 0.45
+  ai_review_high: 0.75
+
+ml:
+  model_path: "./models/isolation_forest.pkl"
+  enabled: true
+
+gemini:
+  enabled: false
+  api_key_env: "GEMINI_API_KEY"
+  base_url: "https://generativelanguage.googleapis.com"
+  api_version: "v1beta"
+  model: "gemini-2.0-flash"
+  timeout_seconds: 15
+
+alerting:
+  console: true
+  store_in_db: true
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    sender: ""
+    password_env: "NETSCAN_EMAIL_PASSWORD"
+    recipients: []
+  telegram:
+    enabled: false
+    bot_token_env: "NETSCAN_TELEGRAM_TOKEN"
+    chat_id: ""
