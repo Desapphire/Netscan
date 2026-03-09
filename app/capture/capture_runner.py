@@ -20,9 +20,8 @@ class CaptureOutput:
 
 def run_capture_loop(
     *,
-    mode: str = "dummy",
+    mode: str = "scapy",
     interface: str | None = None,
-    pcap_path: str | None = None,
     bpf_filter: str | None = None,
 ) -> Iterator[CaptureOutput]:
     """
@@ -34,7 +33,7 @@ def run_capture_loop(
     window_s = int(cfg["app"]["window_seconds"])
     slide_s = int(cfg["app"]["slide_seconds"])
 
-    settings = CaptureSettings(mode=mode, interface=interface, pcap_path=pcap_path, bpf_filter=bpf_filter)
+    settings = CaptureSettings(mode=mode, interface=interface, bpf_filter=bpf_filter)
     src = PacketSource(settings)
 
     buf: Deque[PacketMeta] = deque()

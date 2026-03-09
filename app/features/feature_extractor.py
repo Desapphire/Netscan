@@ -8,6 +8,7 @@ from app.capture.flow_aggregator import FlowAggregator
 from app.capture.types import PacketMeta
 from app.features.feature_types import FeatureVector
 from app.utils.ip_utils import compute_vpn_ratio
+from app.detection.dns_intelligence import DNSIntelligenceModule
 
 logger = logging.getLogger("netscan.features")
 
@@ -15,8 +16,9 @@ logger = logging.getLogger("netscan.features")
 class FeatureExtractor:
     """Wraps FlowAggregator and enriches the resulting feature vectors."""
 
-    def __init__(self, window_seconds: int = 20):
+    def __init__(self, window_seconds: int = 20, dns_intel: DNSIntelligenceModule | None = None):
         self.aggregator = FlowAggregator(window_seconds)
+        self.dns_intel = dns_intel or DNSIntelligenceModule()
 
     def extract(
         self,
@@ -46,12 +48,16 @@ class FeatureExtractor:
 
             vpn_ratio = compute_vpn_ratio(dst_ips) if dst_ips else fv.ratio_known_vpn_ips
 
-            restricted_hits = sum(
-                1 for d in domains if any(kw in d for kw in all_keywords)
-            )
+            restricted_hits: int = 0
+            for d in domains:
+                # Use our smart DNS intelligence for classification
+                intel_res = self.dns_intel.classify_domain(d)
+                if intel_res["category"] != "normal":
+                    restricted_hits += 1
+
             restricted_ratio = restricted_hits / max(len(domains), 1)
 
-            # Determine dst_category heuristic
+            # Determine dst_category heuristic (using legacy kw for extra safety or override)
             dst_cat = _guess_category(fv, vpn_ratio, restricted_ratio, domains, restricted_keywords)
 
             enriched.append(

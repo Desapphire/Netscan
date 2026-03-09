@@ -47,9 +47,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "total_alerts": total_alerts,
             "open_alerts": open_alerts,
             "critical": critical,
@@ -71,9 +71,9 @@ def alert_detail_page(alert_id: int, request: Request, db: Session = Depends(get
         ai = db.query(AIAssessment).filter(AIAssessment.id == alert.ai_assessment_id).first()
 
     return templates.TemplateResponse(
+        request,
         "alert_detail.html",
         {
-            "request": request,
             "alert": alert,
             "detection": detection,
             "ai": ai,

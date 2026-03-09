@@ -1,0 +1,27 @@
+# DNS Intelligence Configuration
+
+# Public DNS resolvers for cross-verification
+resolvers:
+  - "1.1.1.1" # Cloudflare
+  - "8.8.8.8" # Google
+
+# Classification lists
+intelligence:
+  gambling:
+    keywords: ["casino", "bet", "poker", "sportsbook", "slots", "gambling", "lottery"]
+    domains: ["bet365.com", "888casino.com", "pokerstars.com"]
+    risk_score: 0.85
+  
+  piracy:
+    keywords: ["torrent", "pirate", "crack", "warez", "1337x", "tpb", "rarbg"]
+    domains: ["thepiratebay.org", "rarbg.to", "yts.mx", "1337x.to"]
+    risk_score: 0.80
+  
+  vpn:
+    keywords: ["vpn", "proxy", "tunnel", "nordvpn", "expressvpn", "surfshark"]
+    domains: ["nordvpn.com", "expressvpn.com", "surfshark.com", "mullvad.net"]
+    risk_score: 0.60
+
+# ASN / Organization intelligence (requires API key)
+ipinfo:
+  token: "1aa4b739e0b80f"

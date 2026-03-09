@@ -11,7 +11,9 @@ def _get_engine():
     cfg = load_config()
     # check_same_thread is required for SQLite with FastAPI dev usage
     connect_args = {"check_same_thread": False} if cfg.db_url.startswith("sqlite") else {}
-    return create_engine(cfg.db_url, future=True, connect_args=connect_args)
+    from sqlalchemy.pool import StaticPool
+    poolclass = StaticPool if ":memory:" in cfg.db_url else None
+    return create_engine(cfg.db_url, future=True, connect_args=connect_args, poolclass=poolclass)
 
 
 engine = _get_engine()

@@ -19,7 +19,7 @@ Capture Layer ──► Feature Extraction ──► Hybrid Detection ──► 
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| **Capture** | `app/capture/` | Reads NIC / pcap with pyshark / scapy, groups into flows |
+| **Capture** | `app/capture/` | Reads NIC with scapy, groups into flows |
 | **Features** | `app/features/` | Converts flows to per-device feature vectors (sliding window) |
 | **Detection** | `app/detection/` | Rule engine + IsolationForest ML, hybrid scoring |
 | **AI Reasoner** | `app/ai_reasoner/` | Gemini API integration for uncertain detections |
@@ -32,6 +32,13 @@ Capture Layer ──► Feature Extraction ──► Hybrid Detection ──► 
 
 ## Quick Start
 
+### 0. Prerequisites (Windows)
+
+**Npcap** is required for raw packet capture on Windows.
+1. Download from [npcap.com](https://npcap.com/).
+2. Run the installer.
+3. **Important:** Check the box "Install Npcap with WinPcap API-compatible Mode" if you have issues with other tools, though NetScan works with default settings.
+
 ### 1. Clone & Install
 
 ```bash
@@ -43,36 +50,31 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-### 2. Seed the Database with Dummy Traffic
+### 2. Start the API Server & Dashboard
 
 ```bash
-python scripts/generate_dummy_traffic.py
-```
-
-This creates `netscan.db` (SQLite) and inserts sample VPN / gambling / torrent / normal scenarios with detections and alerts.
-
-### 3. Start the Dashboard
-
-```bash
-python scripts/run_api.py
+python cli.py api
 ```
 
 Open **http://localhost:8000** in your browser.
 
-### 4. Run the Live Pipeline (dummy mode)
+### 3. Run the Live Pipeline
 
 ```bash
-python scripts/run_capture.py --mode dummy
+python cli.py capture --mode scapy --interface Wi-Fi
 ```
 
-Every ~10 s a window of dummy traffic is analysed and alerts appear in the console and dashboard.
+Every ~10 s a window of traffic is analysed and alerts appear in the console and dashboard.
 
-### 5. Run with Real Traffic (requires tshark)
+### 4. Run with Real Traffic
 
 ```bash
-python scripts/run_capture.py --mode live --interface eth0
-# or replay a pcap:
-python scripts/run_capture.py --mode pcap --pcap path/to/file.pcap
+python cli.py capture --mode scapy --interface eth0
+```
+
+### 5. All-in-One Live Monitor
+```bash
+python cli.py live --interface Wi-Fi
 ```
 
 ---
@@ -107,9 +109,14 @@ Edit `config/rules.yaml` to add/modify VPN ports, torrent ports, restricted doma
 ## ML Model Training
 
 1. Capture several hours of **normal** traffic.
-2. Open `models/train_notebook.ipynb` and run all cells.
-3. The notebook trains an `IsolationForest` and saves `models/isolation_forest.pkl`.
-4. Restart the pipeline — the model loads automatically.
+2. Run the training command:
+   ```bash
+   python cli.py train
+   ```
+3. The script trains an `IsolationForest` and saves it to `models/isolation_forest.pkl`.
+4. The pipeline will automatically load the new model on restart or next analysis window.
+
+Alternatively, you can explore the data using the notebook at `models/train_notebook.ipynb`.
 
 See `models/ml_config.yaml` for hyperparameters.
 

@@ -21,9 +21,15 @@ STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    from app.utils.logging_utils import setup_logging
+    setup_logging()
     init_db()
     yield
-    # Shutdown (nothing to do)
+    # Shutdown — stop live capture if running
+    from app.capture.live_capture_service import LiveCaptureService
+    svc = LiveCaptureService.get_instance()
+    if svc.is_running:
+        svc.stop()
 
 
 def create_app() -> FastAPI:
@@ -45,5 +51,9 @@ def create_app() -> FastAPI:
     # Dashboard HTML route
     from .routes_dashboard import router as dash_router
     app.include_router(dash_router, tags=["dashboard"])
+
+    # Live monitoring API
+    from .routes_live import router as live_router
+    app.include_router(live_router, prefix="/api/live", tags=["live"])
 
     return app

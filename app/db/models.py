@@ -126,3 +126,16 @@ class Alert(Base):
 
     detection: Mapped["Detection | None"] = relationship(back_populates="alerts")
 
+class DNSAnalysis(Base):
+    __tablename__ = "dns_analysis"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    src_ip: Mapped[str] = mapped_column(String(64), index=True)
+    domain: Mapped[str] = mapped_column(String(255), index=True)
+    resolved_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    
+    category: Mapped[str] = mapped_column(String(64), default="normal")  # gambling|piracy|vpn|normal
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
