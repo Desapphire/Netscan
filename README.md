@@ -46,7 +46,7 @@ pip install -r requirements.txt
 ### 2. Start the API Server & Dashboard
 
 ```bash
-python run_api.py
+python cli.py api
 ```
 
 Open **http://localhost:8000** in your browser.
@@ -54,15 +54,20 @@ Open **http://localhost:8000** in your browser.
 ### 3. Run the Live Pipeline
 
 ```bash
-python run_capture.py --mode scapy --interface Wi-Fi
+python cli.py capture --mode scapy --interface Wi-Fi
 ```
 
 Every ~10 s a window of traffic is analysed and alerts appear in the console and dashboard.
 
-### 5. Run with Real Traffic
+### 4. Run with Real Traffic
 
 ```bash
-python scripts/run_capture.py --mode scapy --interface eth0
+python cli.py capture --mode scapy --interface eth0
+```
+
+### 5. All-in-One Live Monitor
+```bash
+python cli.py live --interface Wi-Fi
 ```
 
 ---
