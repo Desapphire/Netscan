@@ -17,6 +17,7 @@ from app.features.feature_extractor import FeatureExtractor
 from app.ai_reasoner.ai_decision_logic import AIDecisionLogic
 from app.alerts.alert_manager import AlertManager
 from app.alerts.notifier import Notifier
+from app.detection.dns_intelligence import DNSIntelligenceModule
 from app.utils.time_utils import utcnow
 
 logger = logging.getLogger("netscan.live")
@@ -119,11 +120,13 @@ class LiveCaptureService:
         """Main pipeline loop running in background thread."""
         try:
             cfg = load_config().raw
-            extractor = FeatureExtractor(int(cfg["app"]["window_seconds"]))
+            dns_intel = DNSIntelligenceModule()
+            extractor = FeatureExtractor(int(cfg["app"]["window_seconds"]), dns_intel=dns_intel)
             detector = HybridDetector()
             ai_logic = AIDecisionLogic()
             alert_mgr = AlertManager()
             notifier = Notifier()
+            dns_intel = DNSIntelligenceModule()
 
             for capture_out in run_capture_loop(
                 mode=mode,
@@ -152,6 +155,29 @@ class LiveCaptureService:
                     capture_out.window_start_ts,
                     capture_out.window_end_ts,
                 )
+
+                # Analyze unique DNS queries in this window
+                unique_queries = set()
+                for p in capture_out.packets:
+                    if p.dns_query:
+                        unique_queries.add((p.src_ip, p.dns_query))
+                
+                for src_ip, domain in unique_queries:
+                    try:
+                        dns_result = dns_intel.analyze_query(src_ip, domain)
+                        if dns_result["category"] != "normal":
+                            # Trigger an alert if restricted activity detected
+                            alert_title = f"Restricted DNS Activity: {dns_result['category'].upper()}"
+                            alert_summary = (
+                                f"Device {src_ip} queried restricted domain: {domain}. "
+                                f"Resolved IP: {dns_result['resolved_ip']}. Reason: {dns_result['reason']}"
+                            )
+                            # We don't have a Detection ID here directly as this is a separate module, 
+                            # but we can still notify or even create a generic alert.
+                            notifier.notify(alert_title, alert_summary, "high" if dns_result["risk_score"] > 0.7 else "medium")
+                            logger.warning("DNS INTEL ALERT: %s - %s", alert_title, alert_summary)
+                    except Exception as e:
+                        logger.error("Error in DNS intelligence analysis for %s: %s", domain, e)
 
                 session = SessionLocal()
                 try:

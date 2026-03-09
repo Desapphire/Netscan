@@ -60,6 +60,7 @@ def run_capture(args: argparse.Namespace) -> None:
     from app.capture.capture_runner import run_capture_loop
     from app.capture.packet_source import auto_detect_interface
     from app.features.feature_extractor import FeatureExtractor
+    from app.detection.dns_intelligence import DNSIntelligenceModule
     from app.db.db_session import SessionLocal, init_db
     from app.db.models import Device
     from app.utils.time_utils import utcnow
@@ -73,7 +74,8 @@ def run_capture(args: argparse.Namespace) -> None:
     ai_logic = AIDecisionLogic()
     alert_mgr = AlertManager()
     notifier = Notifier()
-    extractor = FeatureExtractor(conf.window_seconds)
+    dns_intel = DNSIntelligenceModule()
+    extractor = FeatureExtractor(conf.window_seconds, dns_intel=dns_intel)
 
     iface = args.interface or auto_detect_interface()
     logger.info(
@@ -95,6 +97,26 @@ def run_capture(args: argparse.Namespace) -> None:
                 capture_out.window_start_ts,
                 capture_out.window_end_ts,
             )
+
+            # Analyze unique DNS queries in this window for real-time alerting
+            unique_queries = set()
+            for p in capture_out.packets:
+                if p.dns_query:
+                    unique_queries.add((p.src_ip, p.dns_query))
+
+            for src_ip, domain in unique_queries:
+                try:
+                    dns_result = dns_intel.analyze_query(src_ip, domain)
+                    if dns_result["category"] != "normal":
+                        alert_title = f"Restricted DNS Activity: {dns_result['category'].upper()}"
+                        alert_summary = (
+                            f"Device {src_ip} queried restricted domain: {domain}. "
+                            f"Resolved IP: {dns_result['resolved_ip']}. Reason: {dns_result['reason']}"
+                        )
+                        notifier.notify(alert_title, alert_summary, "high" if dns_result["risk_score"] > 0.7 else "medium")
+                        logger.warning("DNS INTEL ALERT: %s - %s", alert_title, alert_summary)
+                except Exception as e:
+                    logger.error("Error in DNS intelligence analysis for %s: %s", domain, e)
 
             session = SessionLocal()
             try:
