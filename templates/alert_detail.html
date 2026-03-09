@@ -7,83 +7,137 @@
 {% else %}
 <a href="/" class="btn btn-outline-secondary btn-sm mb-3">← Back to Dashboard</a>
 
-<div class="card p-4 mb-4">
-    <div class="d-flex justify-content-between align-items-start">
+<div class="card p-4 mb-4 border-0">
+    <div class="d-flex justify-content-between align-items-start mb-3">
         <div>
-            <h4>
-                <span class="badge badge-{{ alert.severity }} me-2">{{ alert.severity }}</span>
-                {{ alert.title }}
+            <h4 class="fw-bold mb-2">
+                <span class="badge badge-{{ alert.severity }} me-2 align-middle fs-6">{{ alert.severity|title }}</span>
+                <span class="align-middle">{{ alert.title }}</span>
             </h4>
-            <p class="text-secondary mb-1">
-                <i class="bi bi-clock"></i> {{ alert.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
-                &nbsp;|&nbsp;
-                <i class="bi bi-pc-display"></i> <code>{{ alert.src_ip }}</code>
-                &nbsp;|&nbsp;
-                Status: <strong>{{ alert.status }}</strong>
+            <p class="text-secondary mb-1 d-flex align-items-center gap-3">
+                <span><i class="bi bi-clock text-info me-1"></i> {{ alert.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    }}</span>
+                <span><i class="bi bi-pc-display text-primary me-1"></i> <code
+                        class="bg-dark px-2 py-1 rounded text-info">{{ alert.src_ip }}</code></span>
+                <span><span class="text-muted">Status:</span>
+                    {% if alert.status == 'open' %}
+                    <strong class="text-warning">Open</strong>
+                    {% elif alert.status == 'acknowledged' %}
+                    <strong class="text-info">Acknowledged</strong>
+                    {% else %}
+                    <strong class="text-success">Resolved</strong>
+                    {% endif %}
+                </span>
             </p>
         </div>
-        <div>
+        <div class="d-flex gap-2">
             {% if alert.status == 'open' %}
-            <button class="btn btn-sm btn-outline-warning" onclick="patchStatus({{ alert.id }}, 'acknowledged')">
-                Acknowledge
+            <button class="btn btn-sm btn-outline-warning d-flex align-items-center gap-2"
+                onclick="patchStatus({{ alert.id }}, 'acknowledged')">
+                <i class="bi bi-check-circle"></i> Acknowledge
             </button>
-            <button class="btn btn-sm btn-outline-success" onclick="patchStatus({{ alert.id }}, 'resolved')">
-                Resolve
+            <button class="btn btn-sm btn-outline-success d-flex align-items-center gap-2"
+                onclick="patchStatus({{ alert.id }}, 'resolved')">
+                <i class="bi bi-check2-all"></i> Resolve
             </button>
             {% elif alert.status == 'acknowledged' %}
-            <button class="btn btn-sm btn-outline-success" onclick="patchStatus({{ alert.id }}, 'resolved')">
-                Resolve
+            <button class="btn btn-sm btn-outline-success d-flex align-items-center gap-2"
+                onclick="patchStatus({{ alert.id }}, 'resolved')">
+                <i class="bi bi-check2-all"></i> Resolve
             </button>
             {% endif %}
         </div>
     </div>
-    <hr style="border-color:#30363d">
-    <p>{{ alert.summary }}</p>
+    <div class="p-3 rounded" style="background: rgba(0,0,0,0.2); border-left: 4px solid var(--accent-info);">
+        <p class="mb-0 text-light lh-lg">{{ alert.summary }}</p>
+    </div>
 </div>
 
 <!-- Detection details -->
 {% if detection %}
-<div class="card p-4 mb-4">
-    <h5><i class="bi bi-graph-up"></i> Detection Scores</h5>
-    <div class="row mt-3">
-        <div class="col-md-3 text-center">
-            <h3>{{ '%.2f'|format(detection.rule_score) }}</h3>
-            <small class="text-secondary">Rule Score</small>
+<div class="card p-4 mb-4 border-0">
+    <h5 class="fw-bold mb-4"><i class="bi bi-graph-up text-primary me-2"></i> Detection Scores</h5>
+    <div class="row g-4">
+        <div class="col-md-3">
+            <div class="p-3 rounded text-center h-100"
+                style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light);">
+                <h3 class="mb-1 fw-bold text-gradient-primary">{{ '%.2f'|format(detection.rule_score) }}</h3>
+                <small class="text-secondary text-uppercase fw-semibold tracking-wide" style="font-size: 0.75rem;">Rule
+                    Score</small>
+            </div>
         </div>
-        <div class="col-md-3 text-center">
-            <h3>{{ '%.2f'|format(detection.ml_score) }}</h3>
-            <small class="text-secondary">ML Score</small>
+        <div class="col-md-3">
+            <div class="p-3 rounded text-center h-100"
+                style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light);">
+                <h3 class="mb-1 fw-bold text-gradient-primary">{{ '%.2f'|format(detection.ml_score) }}</h3>
+                <small class="text-secondary text-uppercase fw-semibold tracking-wide" style="font-size: 0.75rem;">ML
+                    Score</small>
+            </div>
         </div>
-        <div class="col-md-3 text-center">
-            <h3>{{ '%.2f'|format(detection.combined_risk) }}</h3>
-            <small class="text-secondary">Combined Risk</small>
+        <div class="col-md-3">
+            <div class="p-3 rounded text-center h-100"
+                style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light);">
+                <h3 class="mb-1 fw-bold text-gradient-high">{{ '%.2f'|format(detection.combined_risk) }}</h3>
+                <small class="text-secondary text-uppercase fw-semibold tracking-wide"
+                    style="font-size: 0.75rem;">Combined Risk</small>
+            </div>
         </div>
-        <div class="col-md-3 text-center">
-            <h3>{{ detection.decision }}</h3>
-            <small class="text-secondary">Decision</small>
+        <div class="col-md-3">
+            <div class="p-3 rounded text-center h-100"
+                style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light);">
+                <h3 class="mb-1 fw-bold text-gradient-info text-capitalize">{{ detection.decision }}</h3>
+                <small class="text-secondary text-uppercase fw-semibold tracking-wide"
+                    style="font-size: 0.75rem;">Decision</small>
+            </div>
         </div>
     </div>
     {% if detection.rule_hits %}
-    <h6 class="mt-4">Rule Hits</h6>
-    <pre style="background:#0d1117; color:#79c0ff; padding:1rem; border-radius:6px; overflow-x:auto">{{ detection.rule_hits | tojson(indent=2) }}</pre>
+    <h6 class="mt-4 fw-semibold">Rule Hits</h6>
+    <pre class="mb-0"><code>{{ detection.rule_hits | tojson(indent=2) }}</code></pre>
     {% endif %}
 </div>
 {% endif %}
 
 <!-- AI Assessment -->
 {% if ai %}
-<div class="card p-4 mb-4">
-    <h5><i class="bi bi-robot"></i> AI Assessment (Gemini)</h5>
-    <table class="table table-sm mt-3">
-        <tr><th style="width:200px">Threat Type</th><td>{{ ai.threat_type }}</td></tr>
-        <tr><th>Severity</th><td><span class="badge badge-{{ ai.severity }}">{{ ai.severity }}</span></td></tr>
-        <tr><th>Explanation</th><td>{{ ai.explanation }}</td></tr>
-        <tr><th>Recommended Action</th><td>{{ ai.recommended_action }}</td></tr>
-    </table>
+<div class="card p-4 mb-4 border-0">
+    <h5 class="fw-bold mb-4"><i class="bi bi-robot text-medium me-2"></i> AI Assessment (Gemini)</h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-borderless align-middle mb-0">
+            <tbody>
+                <tr>
+                    <th class="ps-3 py-3 text-secondary"
+                        style="width:200px; background: rgba(0,0,0,0.1); border-radius: 6px 0 0 6px;">Threat Type</th>
+                    <td class="pe-3 py-3 fw-medium" style="background: rgba(0,0,0,0.1); border-radius: 0 6px 6px 0;">{{
+                        ai.threat_type }}</td>
+                </tr>
+                <tr>
+                    <th class="ps-3 py-3 text-secondary">Severity</th>
+                    <td class="pe-3 py-3"><span class="badge badge-{{ ai.severity }}">{{ ai.severity|title }}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 py-3 text-secondary"
+                        style="background: rgba(0,0,0,0.1); border-radius: 6px 0 0 6px;">Explanation</th>
+                    <td class="pe-3 py-3 lh-lg" style="background: rgba(0,0,0,0.1); border-radius: 0 6px 6px 0;">{{
+                        ai.explanation }}</td>
+                </tr>
+                <tr>
+                    <th class="ps-3 py-3 text-secondary">Recommended Action</th>
+                    <td class="pe-3 py-3 lh-lg">{{ ai.recommended_action }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
     {% if ai.raw_response %}
-    <details class="mt-2">
-        <summary class="text-secondary" style="cursor:pointer">Raw AI Response</summary>
-        <pre style="background:#0d1117; color:#79c0ff; padding:1rem; border-radius:6px; margin-top:0.5rem; overflow-x:auto">{{ ai.raw_response | tojson(indent=2) }}</pre>
+    <details class="mt-4">
+        <summary class="text-secondary fw-medium p-2 rounded"
+            style="cursor:pointer; background: rgba(255,255,255,0.03); display: inline-block;">
+            <i class="bi bi-code-slash me-2"></i>View Raw AI Response
+        </summary>
+        <div class="mt-3">
+            <pre class="mb-0"><code>{{ ai.raw_response | tojson(indent=2) }}</code></pre>
+        </div>
     </details>
     {% endif %}
 </div>
@@ -94,12 +148,12 @@
 
 {% block extra_scripts %}
 <script>
-function patchStatus(id, status) {
-    fetch(`/alerts/${id}`, {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({status})
-    }).then(() => location.reload());
-}
+    function patchStatus(id, status) {
+        fetch(`/alerts/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+        }).then(() => location.reload());
+    }
 </script>
 {% endblock %}

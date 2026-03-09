@@ -21,6 +21,9 @@ class AppConfig:
 
     @property
     def db_url(self) -> str:
+        import os
+        if os.environ.get("NETSCAN_TEST"):
+            return "sqlite:///:memory:"
         return str(self.raw["db"]["url"])
 
 

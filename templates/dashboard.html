@@ -1,31 +1,148 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — NetScan{% endblock %}
 
+{% block extra_head %}
+<style>
+    .live-bar {
+        background: linear-gradient(135deg, rgba(56, 139, 253, 0.15), rgba(63, 185, 80, 0.10));
+        border: 1px solid rgba(56, 139, 253, 0.3);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .live-bar .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+
+    .live-bar .status-dot.running {
+        background: #3fb950;
+        animation: pulse-green 1.5s infinite;
+    }
+
+    .live-bar .status-dot.stopped {
+        background: #8b949e;
+    }
+
+    @keyframes pulse-green {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+        }
+
+        50% {
+            box-shadow: 0 0 0 6px rgba(63, 185, 80, 0);
+        }
+    }
+
+    .live-stat {
+        text-align: center;
+        min-width: 80px;
+    }
+
+    .live-stat .value {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e6edf3;
+    }
+
+    .live-stat .label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #8b949e;
+    }
+
+    .btn-live {
+        border-radius: 8px;
+        font-weight: 600;
+        padding: 0.4rem 1.2rem;
+    }
+
+    .auto-refresh-badge {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(56, 139, 253, 0.2);
+        border: 1px solid rgba(56, 139, 253, 0.3);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 0.75rem;
+        color: #8b949e;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+<!-- Live Monitoring Bar -->
+<div class="live-bar mb-4" id="liveBar">
+    <div class="d-flex align-items-center">
+        <span class="status-dot stopped" id="statusDot"></span>
+        <span class="fw-bold me-3" id="statusText">Checking...</span>
+        <span class="text-secondary small" id="interfaceText"></span>
+    </div>
+    <div class="d-flex gap-4">
+        <div class="live-stat">
+            <div class="value" id="livePkts">—</div>
+            <div class="label">Pkts/sec</div>
+        </div>
+        <div class="live-stat">
+            <div class="value" id="liveBytes">—</div>
+            <div class="label">KB/sec</div>
+        </div>
+        <div class="live-stat">
+            <div class="value" id="liveIPs">—</div>
+            <div class="label">Active IPs</div>
+        </div>
+        <div class="live-stat">
+            <div class="value" id="liveWindows">—</div>
+            <div class="label">Windows</div>
+        </div>
+    </div>
+    <div>
+        <button class="btn btn-sm btn-success btn-live" id="btnStart" onclick="startCapture()">
+            <i class="bi bi-play-fill"></i> Start Capture
+        </button>
+        <button class="btn btn-sm btn-outline-danger btn-live d-none" id="btnStop" onclick="stopCapture()">
+            <i class="bi bi-stop-fill"></i> Stop
+        </button>
+    </div>
+</div>
+
 <!-- Stats Cards -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card stat-card">
-            <h2>{{ total_alerts }}</h2>
-            <p class="text-secondary mb-0">Total Alerts</p>
+            <h2 id="statTotal">{{ total_alerts }}</h2>
+            <p class="text-secondary mb-0 fw-medium text-uppercase small tracking-wide">Total Alerts</p>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card">
-            <h2 class="text-warning">{{ open_alerts }}</h2>
-            <p class="text-secondary mb-0">Open Alerts</p>
+            <h2 class="text-gradient-high" id="statOpen">{{ open_alerts }}</h2>
+            <p class="text-secondary mb-0 fw-medium text-uppercase small tracking-wide">Open Alerts</p>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card">
-            <h2 class="text-danger">{{ critical }}</h2>
-            <p class="text-secondary mb-0">Critical</p>
+            <h2 class="text-gradient-critical" id="statCritical">{{ critical }}</h2>
+            <p class="text-secondary mb-0 fw-medium text-uppercase small tracking-wide">Critical</p>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card">
-            <h2 style="color:#d29922">{{ high }}</h2>
-            <p class="text-secondary mb-0">High</p>
+            <h2 class="text-gradient-high" id="statHigh">{{ high }}</h2>
+            <p class="text-secondary mb-0 fw-medium text-uppercase small tracking-wide">High</p>
         </div>
     </div>
 </div>
@@ -33,98 +150,121 @@
 <!-- Charts row -->
 <div class="row g-3 mb-4">
     <div class="col-md-6">
-        <div class="card p-3">
-            <h5 class="card-title">Alerts by Threat Type</h5>
-            <canvas id="threatChart" height="220"></canvas>
+        <div class="card p-4 h-100">
+            <h5 class="card-title fw-bold mb-4">Alerts by Threat Type</h5>
+            <div style="position: relative; height:240px; width:100%">
+                <canvas id="threatChart"></canvas>
+            </div>
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card p-3">
-            <h5 class="card-title">Severity Distribution</h5>
-            <canvas id="severityChart" height="220"></canvas>
+        <div class="card p-4 h-100">
+            <h5 class="card-title fw-bold mb-4">Severity Distribution</h5>
+            <div style="position: relative; height:240px; width:100%">
+                <canvas id="severityChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Recent Alerts Table -->
-<div class="card p-3">
-    <h5 class="card-title mb-3"><i class="bi bi-exclamation-triangle"></i> Recent Alerts</h5>
-    <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle">
-            <thead>
+<div class="card p-0 overflow-hidden mb-4">
+    <div class="p-4 border-bottom" style="border-color: var(--border-light) !important;">
+        <h5 class="card-title mb-0 fw-bold"><i class="bi bi-exclamation-triangle text-warning me-2"></i> Recent Alerts
+        </h5>
+    </div>
+    <div class="table-responsive" id="alertsTableContainer">
+        <table class="table table-hover align-middle mb-0">
+            <thead style="background: rgba(0,0,0,0.2);">
                 <tr>
-                    <th>ID</th>
-                    <th>Time</th>
-                    <th>Source IP</th>
-                    <th>Threat</th>
-                    <th>Severity</th>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="ps-4 text-secondary fw-semibold">ID</th>
+                    <th class="text-secondary fw-semibold">Time</th>
+                    <th class="text-secondary fw-semibold">Source IP</th>
+                    <th class="text-secondary fw-semibold">Threat</th>
+                    <th class="text-secondary fw-semibold">Severity</th>
+                    <th class="text-secondary fw-semibold">Title</th>
+                    <th class="text-secondary fw-semibold">Status</th>
+                    <th class="pe-4 text-end text-secondary fw-semibold">Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="alertsBody">
                 {% for a in recent_alerts %}
                 <tr>
-                    <td>{{ a.id }}</td>
-                    <td><small>{{ a.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
-                    <td><code>{{ a.src_ip }}</code></td>
-                    <td>{{ a.threat_type }}</td>
+                    <td class="ps-4 text-muted">#{{ a.id }}</td>
+                    <td class="text-muted"><small>{{ a.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                    <td><code class="bg-dark px-2 py-1 rounded text-info">{{ a.src_ip }}</code></td>
+                    <td class="fw-medium">{{ a.threat_type }}</td>
                     <td>
-                        <span class="badge badge-{{ a.severity }}">{{ a.severity }}</span>
+                        <span class="badge badge-{{ a.severity }}">{{ a.severity|title }}</span>
                     </td>
-                    <td>{{ a.title[:60] }}</td>
+                    <td class="text-truncate" style="max-width: 300px;">{{ a.title }}</td>
                     <td>
                         {% if a.status == 'open' %}
-                            <span class="badge bg-warning text-dark">open</span>
+                        <span class="badge bg-warning"><i class="bi bi-circle-fill me-1"
+                                style="font-size:0.5rem;vertical-align:middle"></i> Open</span>
                         {% elif a.status == 'acknowledged' %}
-                            <span class="badge bg-info">ack</span>
+                        <span class="badge bg-info"><i class="bi bi-check-circle-fill me-1"
+                                style="font-size:0.5rem;vertical-align:middle"></i> Ack</span>
                         {% else %}
-                            <span class="badge bg-success">resolved</span>
+                        <span class="badge bg-success"><i class="bi bi-check2-all me-1"
+                                style="font-size:0.5rem;vertical-align:middle"></i> Resolved</span>
                         {% endif %}
                     </td>
-                    <td><a href="/alert/{{ a.id }}">Details →</a></td>
+                    <td class="pe-4 text-end">
+                        <a href="/alert/{{ a.id }}" class="btn btn-sm btn-outline-secondary">View <i
+                                class="bi bi-arrow-right"></i></a>
+                    </td>
                 </tr>
                 {% endfor %}
                 {% if not recent_alerts %}
-                <tr><td colspan="8" class="text-center text-secondary">No alerts yet.</td></tr>
+                <tr>
+                    <td colspan="8" class="text-center text-secondary py-5">
+                        <i class="bi bi-shield-check display-4 d-block mb-3 opacity-50"></i>
+                        No alerts currently active.
+                    </td>
+                </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 </div>
+
+<div class="auto-refresh-badge" id="refreshBadge">
+    <i class="bi bi-arrow-repeat"></i> Auto-refresh: <span id="refreshCountdown">10</span>s
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// Threat-type pie chart
-const threatLabels = {{ by_type.keys()|list|tojson }};
-const threatData   = {{ by_type.values()|list|tojson }};
-new Chart(document.getElementById('threatChart'), {
-    type: 'doughnut',
-    data: {
-        labels: threatLabels,
-        datasets: [{
-            data: threatData,
-            backgroundColor: ['#da3633','#d29922','#388bfd','#3fb950','#8b949e','#f778ba'],
-        }]
-    },
-    options: {
-        plugins: { legend: { labels: { color: '#c9d1d9' } } },
-        responsive: true,
-    }
-});
+    // ===== Charts (initial render from server-side data) =====
+    const threatLabels = {{ by_type.keys() | list | tojson }};
+    const threatData = {{ by_type.values() | list | tojson }};
+    let threatChart = new Chart(document.getElementById('threatChart'), {
+        type: 'doughnut',
+        data: {
+            labels: threatLabels,
+            datasets: [{
+                data: threatData,
+                backgroundColor: ['#da3633', '#d29922', '#388bfd', '#3fb950', '#8b949e', '#f778ba'],
+            }]
+        },
+        options: {
+            plugins: { legend: { labels: { color: '#c9d1d9' } } },
+            responsive: true,
+        }
+    });
 
-// Severity bar chart (fetch from API)
-fetch('/alerts/stats')
-    .then(r => r.json())
-    .then(data => {
+    let severityChart = null;
+
+    function buildSeverityChart(data) {
         const sevLabels = Object.keys(data.by_severity || {});
         const sevValues = Object.values(data.by_severity || {});
         const sevColors = sevLabels.map(s => ({
-            critical:'#da3633', high:'#d29922', medium:'#388bfd', low:'#3fb950'
+            critical: '#da3633', high: '#d29922', medium: '#388bfd', low: '#3fb950'
         }[s] || '#8b949e'));
-        new Chart(document.getElementById('severityChart'), {
+        const ctx = document.getElementById('severityChart');
+        if (severityChart) severityChart.destroy();
+        severityChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: sevLabels,
@@ -143,6 +283,116 @@ fetch('/alerts/stats')
                 responsive: true,
             }
         });
-    });
+    }
+
+    // Initial severity chart load
+    fetch('/alerts/stats')
+        .then(r => r.json())
+        .then(data => buildSeverityChart(data));
+
+    // ===== Live Capture Controls =====
+    function updateLiveBar(data) {
+        const dot = document.getElementById('statusDot');
+        const txt = document.getElementById('statusText');
+        const ifaceTxt = document.getElementById('interfaceText');
+        const btnStart = document.getElementById('btnStart');
+        const btnStop = document.getElementById('btnStop');
+
+        if (data.running) {
+            dot.className = 'status-dot running';
+            txt.textContent = 'Live Monitoring Active';
+            txt.style.color = '#3fb950';
+            ifaceTxt.textContent = data.interface ? `on ${data.interface}` : '';
+            btnStart.classList.add('d-none');
+            btnStop.classList.remove('d-none');
+        } else {
+            dot.className = 'status-dot stopped';
+            txt.textContent = 'Capture Stopped';
+            txt.style.color = '#8b949e';
+            ifaceTxt.textContent = data.error || '';
+            btnStart.classList.remove('d-none');
+            btnStop.classList.add('d-none');
+        }
+
+        document.getElementById('livePkts').textContent =
+            data.packets_per_second !== undefined ? data.packets_per_second : '—';
+        document.getElementById('liveBytes').textContent =
+            data.bytes_per_second !== undefined ? (data.bytes_per_second / 1024).toFixed(1) : '—';
+        document.getElementById('liveIPs').textContent =
+            data.active_ips ? data.active_ips.length : '—';
+        document.getElementById('liveWindows').textContent =
+            data.windows_processed !== undefined ? data.windows_processed : '—';
+    }
+
+    function startCapture() {
+        fetch('/api/live/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json())
+            .then(data => updateLiveBar(data))
+            .catch(e => console.error('Start failed:', e));
+    }
+
+    function stopCapture() {
+        fetch('/api/live/stop', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => updateLiveBar(data))
+            .catch(e => console.error('Stop failed:', e));
+    }
+
+    // Poll live status
+    function pollLive() {
+        fetch('/api/live/status')
+            .then(r => r.json())
+            .then(data => updateLiveBar(data))
+            .catch(() => { });
+    }
+    pollLive();
+    setInterval(pollLive, 3000);
+
+    // ===== Auto-refresh stats and alerts =====
+    let countdown = 10;
+    function refreshDashboard() {
+        // Refresh alert stats
+        fetch('/alerts/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('statTotal').textContent = data.total || 0;
+                document.getElementById('statOpen').textContent = data.open || 0;
+                const sev = data.by_severity || {};
+                document.getElementById('statCritical').textContent = sev.critical || 0;
+                document.getElementById('statHigh').textContent = sev.high || 0;
+
+                // Update threat type chart
+                const byType = data.by_threat_type || {};
+                threatChart.data.labels = Object.keys(byType);
+                threatChart.data.datasets[0].data = Object.values(byType);
+                threatChart.update();
+
+                // Update severity chart
+                buildSeverityChart(data);
+            })
+            .catch(() => { });
+
+        // Refresh alert table via full page partial (simple approach)
+        fetch(window.location.href)
+            .then(r => r.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newBody = doc.getElementById('alertsBody');
+                if (newBody) {
+                    document.getElementById('alertsBody').innerHTML = newBody.innerHTML;
+                }
+            })
+            .catch(() => { });
+    }
+
+    setInterval(() => {
+        countdown--;
+        document.getElementById('refreshCountdown').textContent = countdown;
+        if (countdown <= 0) {
+            countdown = 10;
+            refreshDashboard();
+        }
+    }, 1000);
 </script>
 {% endblock %}

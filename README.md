@@ -19,7 +19,7 @@ Capture Layer ──► Feature Extraction ──► Hybrid Detection ──► 
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| **Capture** | `app/capture/` | Reads NIC / pcap with pyshark / scapy, groups into flows |
+| **Capture** | `app/capture/` | Reads NIC with scapy, groups into flows |
 | **Features** | `app/features/` | Converts flows to per-device feature vectors (sliding window) |
 | **Detection** | `app/detection/` | Rule engine + IsolationForest ML, hybrid scoring |
 | **AI Reasoner** | `app/ai_reasoner/` | Gemini API integration for uncertain detections |
@@ -43,36 +43,26 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-### 2. Seed the Database with Dummy Traffic
+### 2. Start the API Server & Dashboard
 
 ```bash
-python scripts/generate_dummy_traffic.py
-```
-
-This creates `netscan.db` (SQLite) and inserts sample VPN / gambling / torrent / normal scenarios with detections and alerts.
-
-### 3. Start the Dashboard
-
-```bash
-python scripts/run_api.py
+python run_api.py
 ```
 
 Open **http://localhost:8000** in your browser.
 
-### 4. Run the Live Pipeline (dummy mode)
+### 3. Run the Live Pipeline
 
 ```bash
-python scripts/run_capture.py --mode dummy
+python run_capture.py --mode scapy --interface Wi-Fi
 ```
 
-Every ~10 s a window of dummy traffic is analysed and alerts appear in the console and dashboard.
+Every ~10 s a window of traffic is analysed and alerts appear in the console and dashboard.
 
-### 5. Run with Real Traffic (requires tshark)
+### 5. Run with Real Traffic
 
 ```bash
-python scripts/run_capture.py --mode live --interface eth0
-# or replay a pcap:
-python scripts/run_capture.py --mode pcap --pcap path/to/file.pcap
+python scripts/run_capture.py --mode scapy --interface eth0
 ```
 
 ---

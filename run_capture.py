@@ -4,11 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
-import os
-
-# Ensure project root is on the path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.config import load_config
 from app.capture.capture_runner import run_capture_loop
@@ -26,10 +21,9 @@ from app.utils.time_utils import utcnow
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="NetScan Capture & Detection Pipeline")
-    parser.add_argument("--mode", default="dummy", choices=["dummy", "live", "pcap"],
+    parser.add_argument("--mode", default="scapy", choices=["scapy"],
                         help="Capture mode")
-    parser.add_argument("--interface", default=None, help="NIC for live mode")
-    parser.add_argument("--pcap", default=None, help="Path to pcap file")
+    parser.add_argument("--interface", default=None, help="NIC for scapy mode")
     parser.add_argument("--bpf", default=None, help="BPF filter")
     args = parser.parse_args()
 
@@ -51,7 +45,6 @@ def main() -> None:
     for capture_out in run_capture_loop(
         mode=args.mode,
         interface=args.interface,
-        pcap_path=args.pcap,
         bpf_filter=args.bpf,
     ):
         window_count += 1
