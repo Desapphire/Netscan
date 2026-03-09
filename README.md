@@ -32,6 +32,13 @@ Capture Layer ──► Feature Extraction ──► Hybrid Detection ──► 
 
 ## Quick Start
 
+### 0. Prerequisites (Windows)
+
+**Npcap** is required for raw packet capture on Windows.
+1. Download from [npcap.com](https://npcap.com/).
+2. Run the installer.
+3. **Important:** Check the box "Install Npcap with WinPcap API-compatible Mode" if you have issues with other tools, though NetScan works with default settings.
+
 ### 1. Clone & Install
 
 ```bash
@@ -102,9 +109,14 @@ Edit `config/rules.yaml` to add/modify VPN ports, torrent ports, restricted doma
 ## ML Model Training
 
 1. Capture several hours of **normal** traffic.
-2. Open `models/train_notebook.ipynb` and run all cells.
-3. The notebook trains an `IsolationForest` and saves `models/isolation_forest.pkl`.
-4. Restart the pipeline — the model loads automatically.
+2. Run the training command:
+   ```bash
+   python cli.py train
+   ```
+3. The script trains an `IsolationForest` and saves it to `models/isolation_forest.pkl`.
+4. The pipeline will automatically load the new model on restart or next analysis window.
+
+Alternatively, you can explore the data using the notebook at `models/train_notebook.ipynb`.
 
 See `models/ml_config.yaml` for hyperparameters.
 

@@ -7,6 +7,7 @@ Usage:
     python cli.py capture      # Run packet capture & processing pipeline
     python cli.py live         # Run live capture & auto-open dashboard
     python cli.py detect       # Run detection on unprocessed features
+    python cli.py train        # Train the ML anomaly detection model
 """
 from __future__ import annotations
 
@@ -57,23 +58,88 @@ def run_api(args: argparse.Namespace) -> None:
 def run_capture(args: argparse.Namespace) -> None:
     """Run the continuous capture and processing loop."""
     from app.capture.capture_runner import run_capture_loop
+    from app.capture.packet_source import auto_detect_interface
+    from app.features.feature_extractor import FeatureExtractor
+    from app.db.db_session import SessionLocal, init_db
+    from app.db.models import Device
+    from app.utils.time_utils import utcnow
+
     setup_logging()
+    logger = logging.getLogger("netscan.capture_main")
+    init_db()
     conf = load_config()
 
-    logging.getLogger("netscan.capture_main").info(
+    detector = HybridDetector()
+    ai_logic = AIDecisionLogic()
+    alert_mgr = AlertManager()
+    notifier = Notifier()
+    extractor = FeatureExtractor(conf.window_seconds)
+
+    iface = args.interface or auto_detect_interface()
+    logger.info(
         "Starting capture runner in %s mode (interface: %s)",
-        args.mode, args.interface or "auto"
+        args.mode, iface or "auto"
     )
 
     try:
-        run_capture_loop(
+        for capture_out in run_capture_loop(
             mode=args.mode,
-            interface=args.interface,
-            window_sec=conf.app.window_seconds,
-            slide_sec=conf.app.slide_seconds,
-        )
+            interface=iface,
+        ):
+            window_packets = len(capture_out.packets)
+            window_bytes = sum(p.length_bytes for p in capture_out.packets)
+            logger.info("Window: %d packets, %d bytes", window_packets, window_bytes)
+
+            fvs = extractor.extract(
+                capture_out.packets,
+                capture_out.window_start_ts,
+                capture_out.window_end_ts,
+            )
+
+            session = SessionLocal()
+            try:
+                for fv in fvs:
+                    nf = alert_mgr.persist_feature(session, fv)
+                    dr = detector.detect(fv)
+                    det = alert_mgr.persist_detection(session, fv, dr, nf.id)
+
+                    logger.info(
+                        "  %s → risk=%.2f (%s) rule=%.2f ml=%.2f %s",
+                        fv.src_ip, dr.combined_risk, dr.decision,
+                        dr.rule_score, dr.ml_score,
+                        f"[{dr.guessed_threat_type}]" if dr.guessed_threat_type else "",
+                    )
+
+                    ai_result = None
+                    ai_id = None
+                    if ai_logic.should_escalate(dr):
+                        ai_result = ai_logic.assess_sync(fv, dr)
+                        ai_obj = alert_mgr.persist_ai_assessment(session, det.id, ai_result)
+                        ai_id = ai_obj.id
+
+                    if dr.decision != "allow":
+                        alert = alert_mgr.create_alert(
+                            session, fv, dr, det.id,
+                            ai=ai_result, ai_assessment_id=ai_id,
+                        )
+                        notifier.notify(alert.title, alert.summary, alert.severity)
+
+                    # Upsert device
+                    device = session.query(Device).filter(Device.ip_address == fv.src_ip).first()
+                    if device:
+                        device.last_seen = utcnow()
+                    else:
+                        session.add(Device(ip_address=fv.src_ip, last_seen=utcnow()))
+
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception("Error processing window")
+            finally:
+                session.close()
+
     except KeyboardInterrupt:
-        logging.getLogger("netscan.capture_main").info("Stopped gracefully by user.")
+        logger.info("Stopped gracefully by user.")
 
 
 def run_live(args: argparse.Namespace) -> None:
@@ -205,6 +271,87 @@ def run_detect(args: argparse.Namespace) -> None:
         session.close()
 
 
+def run_train(args: argparse.Namespace) -> None:
+    """Train the anomaly detection model using baseline data in the database."""
+    import yaml
+    import joblib
+    import pandas as pd
+    import os
+    from sqlalchemy import create_engine
+    from sklearn.ensemble import IsolationForest
+
+    setup_logging()
+    logger = logging.getLogger("netscan.train")
+
+    # Load config
+    config_path = os.path.join("models", "ml_config.yaml")
+    if not os.path.exists(config_path):
+        logger.error("ML config not found at %s. Ensure you are in the project root.", config_path)
+        return
+
+    try:
+        with open(config_path, "r") as f:
+            ml_cfg = yaml.safe_load(f)
+    except Exception as e:
+        logger.error("Failed to load ML config: %s", e)
+        return
+
+    FEATURE_COLS = ml_cfg["features"]
+    MODEL_PARAMS = ml_cfg["model"]["params"]
+    OUTPUT_PATH = ml_cfg["training"]["output_path"]
+    MIN_SAMPLES = ml_cfg["training"].get("min_samples", 500)
+
+    # Load data
+    logger.info("Loading baseline data from database...")
+    DB_URL = "sqlite:///netscan.db"
+    engine = create_engine(DB_URL)
+    
+    try:
+        # Use a raw SQL query or read_sql_table
+        df = pd.read_sql_table("network_features", engine)
+    except Exception as e:
+        logger.error("Failed to load data from 'network_features' table: %s. Have you captured any traffic yet?", e)
+        return
+
+    count = len(df)
+    logger.info("Found %d samples in database.", count)
+
+    if count < 2:
+        logger.error("Not enough data to train. Capture some normal traffic first.")
+        return
+
+    if count < MIN_SAMPLES:
+        logger.warning("Found only %d samples. Recommended minimum is %d. The model might be unreliable.", count, MIN_SAMPLES)
+
+    # Preprocess
+    logger.info("Preprocessing features...")
+    # Ensure all columns exist
+    missing = [c for c in FEATURE_COLS if c not in df.columns]
+    if missing:
+        logger.error("Missing expected feature columns in DB: %s", missing)
+        return
+
+    X = df[FEATURE_COLS].fillna(0).values.astype(float)
+
+    # Train
+    logger.info("Training IsolationForest model (n_estimators=%d)...", MODEL_PARAMS.get("n_estimators", 100))
+    model = IsolationForest(**MODEL_PARAMS)
+    try:
+        model.fit(X)
+    except Exception as e:
+        logger.error("Training failed: %s", e)
+        return
+
+    # Save
+    logger.info("Saving model to %s...", OUTPUT_PATH)
+    try:
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+        joblib.dump(model, OUTPUT_PATH)
+        logger.info("✓ Training complete. The detection pipeline will now use this model for scoring.")
+    except Exception as e:
+        logger.error("Failed to save model: %s", e)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NetScan Unified CLI Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -230,6 +377,9 @@ def main() -> None:
     # Detection batch command
     detect_parser = subparsers.add_parser("detect", help="Run detection on unprocessed feature rows in DB")
 
+    # Training command
+    train_parser = subparsers.add_parser("train", help="Train the ML anomaly detection model using DB data")
+
     args = parser.parse_args()
 
     if args.command == "api":
@@ -240,6 +390,8 @@ def main() -> None:
         run_live(args)
     elif args.command == "detect":
         run_detect(args)
+    elif args.command == "train":
+        run_train(args)
 
 
 if __name__ == "__main__":
