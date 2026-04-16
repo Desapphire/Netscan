@@ -138,6 +138,13 @@ class PacketSource:
         logger.info("Starting Scapy live capture on interface: %s", iface)
 
         import queue
+        import sys
+        import os
+        
+        # Linux Optimization: Check for root/capabilities
+        if sys.platform != "win32" and os.getuid() != 0:
+            logger.warning("Packet capture may fail or be limited without root/CAP_NET_ADMIN on Linux.")
+
         pkt_queue: queue.Queue = queue.Queue(maxsize=10000)
         _stop = False
 
@@ -201,9 +208,17 @@ class PacketSource:
                 # provider, so BPF filters will crash. IP filtering is done
                 # in the _callback via pkt.haslayer(IP) instead.
                 sniff_kwargs = dict(iface=iface, prn=_callback, store=False)
+                
+                # Linux performance optimization: Use L3PacketSocket if available
+                if sys.platform != "win32":
+                    try:
+                        from scapy.arch import L3PacketSocket
+                        sniff_kwargs["socket"] = L3PacketSocket
+                    except ImportError:
+                        pass
+
                 if self.settings.bpf_filter:
-                    # Only add BPF filter if user explicitly set one —
-                    # it may work on Linux or if libpcap becomes available.
+                    # BPF filters are extremely efficient on Linux (kernel-level)
                     sniff_kwargs["filter"] = self.settings.bpf_filter
                 sniff(**sniff_kwargs)
             except Exception as e:

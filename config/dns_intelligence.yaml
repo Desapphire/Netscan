@@ -13,7 +13,7 @@ intelligence:
     risk_score: 0.85
   
   piracy:
-    keywords: ["torrent", "pirate", "crack", "warez", "1337x", "tpb", "rarbg"]
+    keywords: ["torrent", "pirate", "crack", "warez", "1337x", "tpb", "rarbg", ]
     domains: ["thepiratebay.org", "rarbg.to", "yts.mx", "1337x.to"]
     risk_score: 0.80
   
@@ -25,3 +25,16 @@ intelligence:
 # ASN / Organization intelligence (requires API key)
 ipinfo:
   token: "1aa4b739e0b80f"
+
+# Known false-positive domains
+whitelist:
+  - "googlezip.net"
+  - "googleapis.com"
+  - "google.com"
+
+# Global Threat Intelligence Feeds (Auto-Updated daily)
+feeds:
+  gambling: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/gambling.txt"
+  malware: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/malware.txt"
+  piracy: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/warez.txt"
+  hacking: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/hacking.txt"

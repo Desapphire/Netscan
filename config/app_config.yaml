@@ -3,6 +3,7 @@ app:
   window_seconds: 20
   slide_seconds: 10
   mode: "monitor"   # monitor | enforce
+  default_interface: "Wi-Fi"
 
 db:
   url: "sqlite:///./netscan.db"
