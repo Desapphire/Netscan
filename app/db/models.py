@@ -32,6 +32,7 @@ class NetworkFeature(Base):
     src_ip: Mapped[str] = mapped_column(String(64), index=True)
     dst_category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
+    num_packets: Mapped[int] = mapped_column(Integer, default=0)
     num_flows: Mapped[int] = mapped_column(Integer, default=0)
     num_unique_dst_ips: Mapped[int] = mapped_column(Integer, default=0)
     num_unique_domains: Mapped[int] = mapped_column(Integer, default=0)
@@ -73,7 +74,14 @@ class Detection(Base):
     rule_hits: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     rule_score: Mapped[float] = mapped_column(Float, default=0.0)
     ml_score: Mapped[float] = mapped_column(Float, default=0.0)
+    ml_confidence: Mapped[float] = mapped_column(Float, default=0.0)
     combined_risk: Mapped[float] = mapped_column(Float, default=0.0)
+
+    correlation_hits: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    guessed_threat_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ml_model_used: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    top_features: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    boosted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     decision: Mapped[str] = mapped_column(String(32), default="allow")  # allow|monitor|block|ai_review
     needs_ai: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -133,9 +141,30 @@ class DNSAnalysis(Base):
     src_ip: Mapped[str] = mapped_column(String(64), index=True)
     domain: Mapped[str] = mapped_column(String(255), index=True)
     resolved_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    
+
     category: Mapped[str] = mapped_column(String(64), default="normal")  # gambling|piracy|vpn|normal
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BlockedIP(Base):
+    """Tracks every IP address blocked automatically or manually."""
+    __tablename__ = "blocked_ips"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ip_address: Mapped[str] = mapped_column(String(64), index=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    threat_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Source of the block
+    blocked_by: Mapped[str] = mapped_column(String(16), default="auto")  # auto | admin
+
+    # Lifecycle
+    status: Mapped[str] = mapped_column(String(16), default="blocked")  # blocked | unblocked
+    blocked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    unblocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    unblocked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)  # admin username / "system"
+    unblock_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # admin review note

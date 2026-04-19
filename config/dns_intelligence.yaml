@@ -2,39 +2,205 @@
 
 # Public DNS resolvers for cross-verification
 resolvers:
-  - "1.1.1.1" # Cloudflare
-  - "8.8.8.8" # Google
+  - "1.1.1.1"   # Cloudflare
+  - "8.8.8.8"   # Google
 
-# Classification lists
+# ── Classification lists ───────────────────────────────────────────────────
 intelligence:
   gambling:
-    keywords: ["casino", "bet", "poker", "sportsbook", "slots", "gambling", "lottery"]
-    domains: ["bet365.com", "888casino.com", "pokerstars.com"]
-    risk_score: 0.85
-  
-  piracy:
-    keywords: ["torrent", "pirate", "crack", "warez", "1337x", "tpb", "rarbg", ]
-    domains: ["thepiratebay.org", "rarbg.to", "yts.mx", "1337x.to"]
-    risk_score: 0.80
-  
-  vpn:
-    keywords: ["vpn", "proxy", "tunnel", "nordvpn", "expressvpn", "surfshark"]
-    domains: ["nordvpn.com", "expressvpn.com", "surfshark.com", "mullvad.net"]
-    risk_score: 0.60
+    keywords:
+      - "casino"
+      - "bet365"
+      - "betway"
+      - "1xbet"
+      - "betonline"
+      - "draftkings"
+      - "fanduel"
+      - "pokerstars"
+      - "poker"
+      - "sportsbook"
+      - "sportsbetting"
+      - "lottery"
+      - "slots"
+      - "bingo"
+      - "blackjack"
+      - "roulette"
+      - "stake"
+      - "jackpot"
+      - "wagering"
+      - "betfair"
+      - "paddy"
+      - "william hill"
+      - "unibet"
+      - "casumo"
+      - "bwin"
+    domains:
+      - "bet365.com"
+      - "888casino.com"
+      - "pokerstars.com"
+      - "draftkings.com"
+      - "fanduel.com"
+      - "betway.com"
+      - "1xbet.com"
+      - "stake.com"
+      - "betfair.com"
+      - "williamhill.com"
+      - "unibet.com"
+      - "casumo.com"
+      - "bwin.com"
+    risk_score: 0.90    # was 0.85
 
-# ASN / Organization intelligence (requires API key)
+  piracy:
+    keywords:
+      - "torrent"
+      - "thepiratebay"
+      - "pirate"
+      - "crack"
+      - "warez"
+      - "nulled"
+      - "leech"
+      - "magnet"
+      - "seedbox"
+      - "repack"
+      - "skidrow"
+      - "fitgirl"
+      - "codex"
+      - "dodi"
+      - "1337x"
+      - "rarbg"
+      - "yts"
+      - "eztv"
+      - "kickass"
+      - "katcr"
+      - "limetorrent"
+      - "zooqle"
+    domains:
+      - "thepiratebay.org"
+      - "rarbg.to"
+      - "rarbg.is"
+      - "yts.mx"
+      - "yts.am"
+      - "1337x.to"
+      - "1337x.st"
+      - "kickasstorrents.to"
+      - "eztv.re"
+      - "limetorrents.info"
+      - "magnetdl.com"
+      - "zooqle.com"
+      - "torlock.com"
+      - "torrentz2.eu"
+      - "rutracker.org"
+    risk_score: 0.92    # was 0.80
+
+  vpn:
+    keywords:
+      - "vpn"
+      - "proxy"
+      - "tunnel"
+      - "nordvpn"
+      - "expressvpn"
+      - "surfshark"
+      - "mullvad"
+      - "privatevpn"
+      - "protonvpn"
+      - "cyberghost"
+      - "ipvanish"
+      - "hidemyass"
+      - "shadowsocks"
+      - "v2ray"
+      - "xray-core"
+      - "anonymizer"
+      - "hideip"
+      - "torguard"
+      - "windscribe"
+    domains:
+      - "nordvpn.com"
+      - "expressvpn.com"
+      - "surfshark.com"
+      - "mullvad.net"
+      - "protonvpn.com"
+      - "cyberghostvpn.com"
+      - "ipvanish.com"
+      - "hidemyass.com"
+      - "torguard.net"
+      - "windscribe.com"
+      - "privatevpn.com"
+      - "purevpn.com"
+      - "zenmate.com"
+    risk_score: 0.80    # was 0.60
+
+  hacking:
+    keywords:
+      - "exploit"
+      - "metasploit"
+      - "hacktools"
+      - "0day"
+      - "zeroday"
+      - "payload"
+      - "c2server"
+      - "botnet"
+      - "ransomware"
+      - "keylogger"
+    domains: []
+    risk_score: 0.95
+
+# ── ASN / Organization intelligence (requires API key) ─────────────────────
 ipinfo:
   token: "1aa4b739e0b80f"
 
-# Known false-positive domains
+# ── Known false-positive / whitelisted domains ─────────────────────────────
+# Add CDN/cloud domains here to prevent false positives, especially
+# important now that port 443 is in the VPN TCP rule.
 whitelist:
-  - "googlezip.net"
-  - "googleapis.com"
+  # Google services
   - "google.com"
+  - "googleapis.com"
+  - "googlezip.net"
+  - "gstatic.com"
+  - "googlevideo.com"
+  - "youtube.com"
+  - "ytimg.com"
+  # Microsoft / Windows Update
+  - "microsoft.com"
+  - "windowsupdate.com"
+  - "live.com"
+  - "office.com"
+  - "office365.com"
+  - "onedrive.com"
+  # Apple
+  - "apple.com"
+  - "icloud.com"
+  # Cloudflare
+  - "cloudflare.com"
+  - "cloudflare-dns.com"
+  # Amazon / AWS
+  - "amazonaws.com"
+  - "amazon.com"
+  # CDNs
+  - "akamai.net"
+  - "akamaized.net"
+  - "fastly.net"
+  - "cdn77.com"
+  # Popular legit services
+  - "github.com"
+  - "stackoverflow.com"
+  - "wikipedia.org"
+  - "whatsapp.com"
+  - "whatsapp.net"
+  - "meta.com"
+  - "facebook.com"
+  - "instagram.com"
+  - "twitter.com"
+  - "x.com"
+  - "netflix.com"
+  - "spotify.com"
+  - "zoom.us"
+  - "teams.microsoft.com"
 
-# Global Threat Intelligence Feeds (Auto-Updated daily)
+# ── Global Threat Intelligence Feeds (Auto-Updated daily) ──────────────────
 feeds:
   gambling: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/gambling.txt"
-  malware: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/malware.txt"
-  piracy: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/warez.txt"
-  hacking: "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/hacking.txt"
+  malware:  "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/malware.txt"
+  piracy:   "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/warez.txt"
+  hacking:  "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/hacking.txt"
+

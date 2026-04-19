@@ -85,18 +85,29 @@ class ProcessingPipeline:
             # Persist Feature
             nf = self.alert_mgr.persist_feature(session, fv)
             
-            # Run Detection
-            dr = self.detector.detect(fv)
+            # Run Detection (pass session for risk boosting)
+            dr = self.detector.detect(fv, session=session)
             
             # Persist Detection Result
             det = self.alert_mgr.persist_detection(session, fv, dr, nf.id)
 
-            logger.info(
-                "  %s \u2192 risk=%.2f (%s) rule=%.2f ml=%.2f %s",
-                fv.src_ip, dr.combined_risk, dr.decision,
-                dr.rule_score, dr.ml_score,
-                f"[{dr.guessed_threat_type}]" if dr.guessed_threat_type else "",
-            )
+            if dr.decision == "allow":
+                logger.debug(
+                    "  %s → risk=%.2f (allow) rule=%.2f ml=%.2f conf=%.2f",
+                    fv.src_ip, dr.combined_risk, dr.rule_score, dr.ml_score, dr.ml_confidence,
+                )
+            else:
+                boost_tag = " [BOOSTED]" if dr.boosted else ""
+                top = ", ".join(f"{n}={v:.2f}" for n, v in dr.top_features[:2])
+                corr = list(dr.correlation_hits.keys())
+                logger.warning(
+                    "  ⚠ %s → risk=%.2f (%s) rule=%.2f ml=%.2f conf=%.2f%s %s%s%s",
+                    fv.src_ip, dr.combined_risk, dr.decision,
+                    dr.rule_score, dr.ml_score, dr.ml_confidence, boost_tag,
+                    f"[{dr.guessed_threat_type}] " if dr.guessed_threat_type else "",
+                    f"corr={corr} " if corr else "",
+                    f"top={top}" if top else "",
+                )
 
             # AI Review Escalation
             ai_result = None

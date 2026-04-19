@@ -26,30 +26,66 @@ def _norm_proto(p: str | None) -> str:
     return "other"
 
 
+# Adapter description substrings to skip — virtual/tunnel/WAN adapters
+_SKIP_ADAPTER_KEYWORDS = [
+    "loopback", "teredo", "isatap", "6to4", "pseudo",
+    "virtualbox", "vmware", "hyper-v", "wan miniport",
+    "microsoft wi-fi direct", "bluetooth", "tap-windows", "nordvpn",
+    "expressvpn", "wireguard", "npcap loopback",
+]
+
+# Preferred physical adapter keywords (higher score = more preferred)
+_PREFERRED_ADAPTER_KEYWORDS = [
+    ("wi-fi", 10), ("wifi", 10), ("wireless", 9),
+    ("intel", 8), ("realtek", 7), ("broadcom", 7),
+    ("ethernet", 5),
+]
+
+
 def auto_detect_interface() -> str | None:
-    """Find the first active network interface with a real IP address."""
+    """
+    Find the best active physical network interface.
+
+    Scoring rules (higher is better):
+    - Must have a real routable IP (not 127.x, 169.254.x)
+    - Skips virtual, WAN Miniport, VirtualBox, Hyper-V, BT adapters
+    - Prefers Wi-Fi > Intel/Realtek Ethernet > generic Ethernet
+    """
     try:
         from scapy.all import conf
+
+        candidates: list[tuple[int, str, str]] = []  # (score, name, ip)
+
         for iface in conf.ifaces.values():
-            ip = str(getattr(iface, "ip", ""))
-            name = str(getattr(iface, "name", ""))
-            desc = str(getattr(iface, "description", "")).lower()
-            # Skip loopback, virtual, and tunnel adapters
+            ip   = str(getattr(iface, "ip", "") or "")
+            name = str(getattr(iface, "name", "") or "")
+            desc = str(getattr(iface, "description", "") or "").lower()
+
+            # Must have a real IP
             if not ip or ip.startswith("127.") or ip.startswith("169.254."):
                 continue
-            if any(skip in desc for skip in ["loopback", "teredo", "isatap", "6to4", "pseudo"]):
+
+            # Skip virtual / tunnel / WAN adapters
+            if any(skip in desc for skip in _SKIP_ADAPTER_KEYWORDS):
                 continue
-            # Prefer Wi-Fi or Ethernet
-            if any(pref in desc for pref in ["wi-fi", "wifi", "wireless", "ethernet", "realtek", "intel"]):
-                logger.info("Auto-detected interface: %s (%s) — %s", name, ip, desc)
-                return name
-        # Fallback to first non-loopback
-        for iface in conf.ifaces.values():
-            ip = str(getattr(iface, "ip", ""))
-            name = str(getattr(iface, "name", ""))
-            if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
-                logger.info("Auto-detected interface (fallback): %s (%s)", name, ip)
-                return name
+
+            # Score by adapter quality
+            score = 1
+            for keyword, bonus in _PREFERRED_ADAPTER_KEYWORDS:
+                if keyword in desc:
+                    score = max(score, bonus)
+                    break
+
+            candidates.append((score, name, ip))
+
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            score, name, ip = candidates[0]
+            logger.info(
+                "Auto-detected interface: %s (%s) [score=%d]", name, ip, score
+            )
+            return name
+
     except Exception as e:
         logger.warning("Could not auto-detect interface: %s", e)
     return None

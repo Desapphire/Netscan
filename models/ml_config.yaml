@@ -3,9 +3,10 @@ model:
   params:
     n_estimators: 50
     contamination: 0.03
-    max_samples: 0.5
+    max_samples: 1.0
     random_state: 42
 features:
+- num_packets
 - num_flows
 - num_unique_dst_ips
 - num_unique_domains
