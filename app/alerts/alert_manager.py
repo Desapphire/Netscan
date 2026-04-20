@@ -29,6 +29,7 @@ class AlertManager:
             window_end=fv.window_end,
             src_ip=fv.src_ip,
             dst_category=fv.dst_category,
+            num_packets=fv.num_packets,
             num_flows=fv.num_flows,
             num_unique_dst_ips=fv.num_unique_dst_ips,
             num_unique_domains=fv.num_unique_domains,
@@ -67,7 +68,13 @@ class AlertManager:
             rule_hits=dr.rule_hits,
             rule_score=dr.rule_score,
             ml_score=dr.ml_score,
+            ml_confidence=dr.ml_confidence,
             combined_risk=dr.combined_risk,
+            correlation_hits=dr.correlation_hits,
+            guessed_threat_type=dr.guessed_threat_type,
+            ml_model_used=dr.ml_model_used,
+            top_features=dr.top_features,
+            boosted=dr.boosted,
             decision=dr.decision,
             needs_ai=dr.needs_ai,
             created_at=utcnow(),
@@ -115,11 +122,21 @@ class AlertManager:
             threat_type = dr.guessed_threat_type or "anomaly"
             severity = _severity_from_risk(dr.combined_risk)
             title = f"{severity.upper()}: {threat_type} from {fv.src_ip}"
+            
             summary = (
                 f"Rule score: {dr.rule_score:.2f}, ML score: {dr.ml_score:.2f}, "
                 f"Combined: {dr.combined_risk:.2f}. Decision: {dr.decision}. "
                 f"Rule hits: {list(dr.rule_hits.keys())}"
             )
+            
+            # --- Hardening: Add privilege warning ---
+            from app.blocking.firewall import is_blocking_enabled
+            if not is_blocking_enabled() and dr.decision == "block":
+                summary = (
+                    "⚠ BLOCKING FAILED (No Admin Privileges)\n"
+                    f"{summary}\n\n"
+                    "Please restart NetScan as Administrator to enable automatic IP blocking."
+                )
 
         alert = Alert(
             detection_id=detection_id,
