@@ -12,8 +12,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import ctypes
 import logging
+import os
 import sys
 import threading
 import time
@@ -33,10 +33,10 @@ from app.utils.logging_utils import setup_logging
 
 
 def is_admin() -> bool:
-    """Check if running with admin privileges (Windows)."""
+    """Check if running with root privileges (Linux)."""
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0  # type: ignore
-    except Exception:
+        return os.getuid() == 0
+    except AttributeError:
         return False
 
 
@@ -105,8 +105,9 @@ def run_live(args: argparse.Namespace) -> None:
 
     if not is_admin():
         logger.warning(
-            "⚠  Not running as Administrator! Live capture may fail. "
-            "Right-click your terminal → 'Run as Administrator'."
+            "⚠  Not running as root! Live capture and firewall blocking may fail. "
+            "Re-run with: sudo %s",
+            " ".join(sys.argv),
         )
 
     init_db()
@@ -116,7 +117,7 @@ def run_live(args: argparse.Namespace) -> None:
 
     if not args.no_capture:
         logger.info("Starting live capture...")
-        interface = args.interface or "Wi-Fi"
+        interface = args.interface or "eth0"
         result = svc.start(interface=interface)
         if result.get("status") == "started":
             logger.info("✓ Live capture started on %s", result.get("interface"))
@@ -326,7 +327,7 @@ def main() -> None:
 
     # Live monitor command
     live_parser = subparsers.add_parser("live", help="Start dashboard and live auto-capture")
-    live_parser.add_argument("--interface", default="Wi-Fi", help="Network interface name (default: 'Wi-Fi')")
+    live_parser.add_argument("--interface", default=None, help="Network interface name (default: auto-detect)")
     live_parser.add_argument("--port", type=int, default=8000, help="Dashboard port (default: 8000)")
     live_parser.add_argument("--no-capture", action="store_true", help="Start dashboard only")
     live_parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")

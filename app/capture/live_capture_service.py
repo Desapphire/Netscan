@@ -88,10 +88,19 @@ class LiveCaptureService:
                 return {"status": "already_running", **self.stats.to_dict()}
 
             iface = interface or auto_detect_interface()
-            mode = "scapy"
             if not iface:
-                logger.warning("No network interface found. Scapy will attempt to capture on default or fail.")
-                mode = "scapy"
+                # Final fallback for Linux
+                import subprocess
+                try:
+                    r = subprocess.run(
+                        ["ip", "-o", "-4", "route", "show", "default"],
+                        capture_output=True, text=True,
+                    )
+                    parts = r.stdout.split()
+                    iface = parts[parts.index("dev") + 1] if "dev" in parts else "eth0"
+                except Exception:
+                    iface = "eth0"
+                logger.warning("Interface not auto-detected; falling back to: %s", iface)
 
             self._stop_event.clear()
             self.stats = LiveStats(running=True, interface=iface, started_at=time.time())
@@ -123,6 +132,16 @@ class LiveCaptureService:
             from app.capture.pipeline import ProcessingPipeline
             pipeline = ProcessingPipeline(int(cfg["app"]["window_seconds"]))
 
+            # ── Real-time DNS fast-path ──────────────────────────────────────
+            # Classifies DNS queries at packet-capture time (~0 ms) so domain
+            # blocks fire immediately instead of waiting for the sliding window.
+            from app.detection.dns_fastpath import RealTimeDNSInterceptor
+            dns_interceptor = RealTimeDNSInterceptor(
+                dns_intel=pipeline.dns_intel,
+                notifier=pipeline.notifier,
+            )
+            logger.info("⚡ Real-time DNS fast-path active.")
+
             # Catch-up phase: process any historical unprocessed features
             try:
                 session = SessionLocal()
@@ -138,6 +157,7 @@ class LiveCaptureService:
             for capture_out in run_capture_loop(
                 mode=mode,
                 interface=interface,
+                dns_interceptor=dns_interceptor,
             ):
                 if self._stop_event.is_set():
                     break
@@ -166,7 +186,14 @@ class LiveCaptureService:
 
         except Exception as e:
             logger.exception("Live capture pipeline failed")
-            self.stats.error = str(e)
+            err_str = str(e).lower()
+            if "permission" in err_str or "operation not permitted" in err_str:
+                self.stats.error = (
+                    "Permission denied. Re-run with: sudo python3 cli.py live  "
+                    "or: sudo setcap cap_net_raw,cap_net_admin+eip $(which python3)"
+                )
+            else:
+                self.stats.error = str(e)
         finally:
             self.stats.running = False
             logger.info("Live capture pipeline stopped.")
