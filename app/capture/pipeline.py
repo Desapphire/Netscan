@@ -16,7 +16,9 @@ from app.ai_reasoner.ai_decision_logic import AIDecisionLogic
 from app.alerts.alert_manager import AlertManager
 from app.alerts.notifier import Notifier
 from app.detection.dns_intelligence import DNSIntelligenceModule
-from app.blocking.firewall import block_ip
+from app.blocking.firewall import block_ip, block_ips, block_doh
+from app.blocking.domain_blocker import block_domain, block_domains
+from app.utils.ip_utils import is_monitor_only_ip, is_safe_to_block_threat
 from app.utils.time_utils import utcnow
 
 logger = logging.getLogger("netscan.pipeline")
@@ -57,6 +59,10 @@ class ProcessingPipeline:
         
         dns_alerts = 0
         for src_ip, domain in unique_queries:
+            # Skip DNS response packets where src_ip is a known resolver (1.1.1.1, 8.8.8.8, etc.)
+            # These are upstream servers responding to queries, not devices on the network.
+            if is_monitor_only_ip(src_ip):
+                continue
             try:
                 dns_result = self.dns_intel.analyze_query(src_ip, domain)
                 if dns_result["category"] != "normal":
@@ -71,13 +77,41 @@ class ProcessingPipeline:
                     dns_alerts += 1
                     
                     if risk_sev == "high":
-                        block_ip(src_ip, f"DNS IPS: {alert_title}")
+                        # Block source device (skipped by guard if it's a LAN IP)
+                        block_ip(src_ip, f"DNS IPS: {alert_title}", session=session)
+                        # Block the resolved IP using threat-aware check
+                        # (allows Cloudflare/CDN IPs for gambling/piracy categories)
+                        bad_ip = dns_result.get("resolved_ip")
+                        category = dns_result.get("category", "")
+                        threat_map = {
+                            "gambling": "gambling_access",
+                            "piracy": "pirated_content",
+                            "vpn": "vpn_usage",
+                            "tor": "tor_usage",
+                        }
+                        threat_type = threat_map.get(category.lower())
+                        if bad_ip and bad_ip != "0.0.0.0":
+                            if is_safe_to_block_threat(bad_ip, threat_type):
+                                block_ip(bad_ip, f"DNS IPS (Destination): {alert_title}",
+                                         threat_type=threat_type, session=session)
+                            else:
+                                logger.info(
+                                    "DNS IPS: resolved IP %s protected (CDN infrastructure) — "
+                                    "domain block applied instead.", bad_ip
+                                )
+                        # Always block the domain in /etc/hosts AND via nftables redirect
+                        block_domain(domain, reason=f"DNS IPS [{dns_result['category']}]: {dns_result['reason']}")
             except Exception as e:
                 logger.error("Error in DNS intelligence analysis for %s: %s", domain, e)
 
         # 3. Detection & Persistence
         alerts_created = 0
         active_ips = []
+
+        # Filter out feature vectors where src_ip is a DNS resolver.
+        # DNS response packets have the resolver (1.1.1.1, 8.8.8.8) as src_ip;
+        # these are not network devices and produce constant false positives.
+        fvs = [fv for fv in fvs if not is_monitor_only_ip(fv.src_ip)]
 
         for fv in fvs:
             active_ips.append(fv.src_ip)
@@ -127,7 +161,52 @@ class ProcessingPipeline:
                 alerts_created += 1
                 
                 if alert.severity in ("high", "critical"):
-                    block_ip(fv.src_ip, f"ML IPS: {alert.title}")
+                    from app.utils.ip_utils import is_safe_to_block, is_private_ip
+
+                    # 1. Attempt to block the source device (skipped for private/LAN IPs)
+                    if is_private_ip(fv.src_ip):
+                        logger.info(
+                            "IPS: %s is a LAN device — blocking destinations and domains instead.",
+                            fv.src_ip,
+                        )
+                    else:
+                        block_ip(fv.src_ip, f"ML IPS: {alert.title}",
+                                 threat_type=dr.guessed_threat_type,
+                                 risk_score=dr.combined_risk, session=session)
+
+                    # 2. Block destination IPs using threat-aware CDN check
+                    dst_ips = fv.extra.get("observed_dst_ips") or []
+                    blockable = [ip for ip in dst_ips
+                                 if is_safe_to_block_threat(ip, dr.guessed_threat_type)]
+                    if blockable:
+                        label = (
+                            "VPN IPS (Gateways)" if dr.guessed_threat_type in ("vpn_usage", "tor_usage")
+                            else "IPS (Destinations)"
+                        )
+                        logger.info(
+                            "Blocking %d destination IPs for %s [%s]: %s",
+                            len(blockable), fv.src_ip, dr.guessed_threat_type, blockable[:5],
+                        )
+                        block_ips(blockable, f"{label}: {alert.title}",
+                                  threat_type=dr.guessed_threat_type,
+                                  risk_score=dr.combined_risk, session=session)
+
+                    # 3. Domain-level blocking via hosts file for gambling/piracy/vpn.
+                    #    Combined with DoH interception so browsers can't bypass /etc/hosts.
+                    if dr.guessed_threat_type in ("gambling_access", "pirated_content", "vpn_usage", "tor_usage"):
+                        observed_domains = fv.extra.get("observed_domains") or []
+                        if observed_domains:
+                            n = block_domains(
+                                observed_domains,
+                                reason=f"ML IPS [{dr.guessed_threat_type}]: {alert.title}",
+                            )
+                            if n:
+                                logger.warning(
+                                    "🚫 DOMAIN BLOCK — %d domains blocked in hosts file for %s",
+                                    n, fv.src_ip,
+                                )
+                        # Block DoH so browsers fall back to system DNS (where /etc/hosts applies)
+                        block_doh()
 
             # Update Device table
             device = session.query(Device).filter(Device.ip_address == fv.src_ip).first()
@@ -195,8 +274,34 @@ class ProcessingPipeline:
                 self.notifier.notify(alert.title, alert.summary, alert.severity)
                 
                 if alert.severity in ("high", "critical"):
-                    block_ip(fv.src_ip, f"Batch ML IPS: {alert.title}")
-            
+                    from app.utils.ip_utils import is_safe_to_block, is_private_ip
+
+                    if not is_private_ip(fv.src_ip):
+                        block_ip(fv.src_ip, f"Batch ML IPS: {alert.title}", threat_type=dr.guessed_threat_type, risk_score=dr.combined_risk, session=session)
+
+                    dst_ips = fv.extra.get("observed_dst_ips") or []
+                    blockable = [ip for ip in dst_ips if is_safe_to_block(ip)]
+                    if blockable:
+                        label = (
+                            "Batch VPN IPS" if dr.guessed_threat_type in ("vpn_usage", "tor_usage")
+                            else "Batch IPS (Destinations)"
+                        )
+                        block_ips(blockable, f"{label}: {alert.title}", threat_type=dr.guessed_threat_type, risk_score=dr.combined_risk, session=session)
+
+                    # Domain-level hosts file blocking for gambling/piracy/vpn
+                    if dr.guessed_threat_type in ("gambling_access", "pirated_content", "vpn_usage", "tor_usage"):
+                        observed_domains = fv.extra.get("observed_domains") or []
+                        if observed_domains:
+                            n = block_domains(
+                                observed_domains,
+                                reason=f"Batch IPS [{dr.guessed_threat_type}]: {alert.title}",
+                            )
+                            if n:
+                                logger.warning(
+                                    "🚫 DOMAIN BLOCK — %d domains blocked in hosts file for %s",
+                                    n, fv.src_ip,
+                                )
+
             processed += 1
         
         return processed

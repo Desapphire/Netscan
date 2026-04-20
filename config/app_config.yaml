@@ -1,9 +1,9 @@
 app:
   name: "netscan"
-  window_seconds: 20
-  slide_seconds: 10
+  window_seconds: 3
+  slide_seconds: 1
   mode: "monitor"   # monitor | enforce
-  default_interface: "Wi-Fi"
+  default_interface: "eth0"
 
 db:
   url: "sqlite:///./netscan.db"
