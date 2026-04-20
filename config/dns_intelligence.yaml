@@ -793,4 +793,4 @@ feeds:
   malware:  "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/malware.txt"
   piracy:   "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/warez.txt"
   hacking:  "https://raw.githubusercontent.com/jankais3r/Synology-Safe-Access-domain-list/master/hacking.txt"
-  adult:    "https://raw.githubusercontent.com/nicehash/NiceHash-Banned-Domains/master/banned_domains.txt"
+  adult:    "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts"
