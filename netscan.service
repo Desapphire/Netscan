@@ -1,6 +1,6 @@
 [Unit]
 Description=NetScan — Metadata-only Network Intrusion Detection System
-Documentation=https://github.com/your-org/netscan
+Documentation=https://github.com/Desapphire/netscan
 After=network-online.target
 Wants=network-online.target
 

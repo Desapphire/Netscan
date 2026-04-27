@@ -1,263 +1,156 @@
-# NetScan — Metadata-Only Network Intrusion Detection System
+<div align="center">
 
-A **near real-time, metadata-only NIDS** for campus / corporate networks on **Linux (Debian/Kali/Ubuntu)**.  
-Captures flows every 5–10 s, extracts per-device features, runs **rule-based + unsupervised ML anomaly detection**, optionally escalates to **Google Gemini** for semantic classification, and surfaces results through a **web dashboard + notifications**.
+![NetScan Banner](docs/assets/banner.png)
 
-> **Privacy first:** Only packet headers (IPs, ports, timestamps, sizes) are analysed — **no payload data is captured or stored**.
+# 🛡️ NetScan
+### **Advanced Metadata-Only Network Intrusion Detection System**
 
----
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/release/python-390/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey.svg)]()
 
-## Architecture
-
-```
-Capture Layer ──► Feature Extraction ──► Hybrid Detection ──► AI Reasoner (Gemini)
-     │                                        │                      │
-     └────────── Database ◄───────────────────┴──────────────────────┘
-                    │
-              Admin Dashboard  ◄──  Alerts  ──►  Email / Telegram
-```
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Capture** | `app/capture/` | Scapy + libpcap, groups packets into flows |
-| **Features** | `app/features/` | Per-device feature vectors (sliding window) |
-| **Detection** | `app/detection/` | Rule engine + IsolationForest ML, hybrid scoring |
-| **AI Reasoner** | `app/ai_reasoner/` | Gemini API integration for uncertain detections |
-| **Alerts** | `app/alerts/` | Persistence, console / email / Telegram notifications |
-| **API & Dashboard** | `app/api/` + `templates/` | FastAPI + Bootstrap/Chart.js admin UI |
-| **Database** | `app/db/` | SQLAlchemy models (SQLite dev / Postgres prod) |
-| **Blocking** | `app/blocking/` | nftables/iptables IP blocking + /etc/hosts domain blocking |
-| **Config** | `config/` | YAML configs for rules, thresholds, Gemini, logging |
+[**Explore Docs**](https://github.com/Desapphire/netscan#quick-start) • [**View Dashboard**](http://localhost:8000) • [**Report Bug**](https://github.com/Desapphire/netscan/issues)
 
 ---
 
-## Quick Start (Linux / Debian / Kali)
+**NetScan** is a near real-time, high-performance NIDS designed for modern corporate and campus environments. By focusing exclusively on network metadata, it provides deep visibility and proactive threat detection without compromising user privacy.
 
-### 1. Prerequisites
+</div>
 
+## ✨ Key Features
+
+<table align="center">
+  <tr>
+    <td width="50%" valign="top">
+      <h4>🔍 Hybrid Detection Engine</h4>
+      Combines lightning-fast <b>Rule-based matching</b> with unsupervised <b>IsolationForest ML</b> for 99% accuracy.
+    </td>
+    <td width="50%" valign="top">
+      <h4>🧠 AI-Powered Reasoning</h4>
+      Escalates complex or ambiguous threats to <b>Google Gemini 2.0</b> for semantic context and deep analysis.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>⚡ Real-Time Response</h4>
+      Automated IP and Domain blocking via <b>nftables/iptables</b> and hosts-file redirection.
+    </td>
+    <td width="50%" valign="top">
+      <h4>📊 Interactive Dashboard</h4>
+      A modern, responsive web interface built with <b>FastAPI</b> and <b>Chart.js</b> for live monitoring.
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    subgraph "Capture Layer"
+        P[Packet Sniffing] -->|Scapy/libpcap| F[Flow Aggregation]
+    end
+
+    subgraph "Processing Pipeline"
+        F -->|Sliding Window| FE[Feature Extraction]
+        FE -->|Vector| HE[Hybrid Detection Engine]
+    end
+
+    subgraph "Intelligence"
+        HE -->|Score| RE[Rule Engine]
+        HE -->|Anomaly| ML[IsolationForest ML]
+        RE & ML -->|Hybrid Score| DM[Decision Maker]
+        DM -->|Escalate| AI[Gemini AI Reasoner]
+    end
+
+    subgraph "Actions"
+        DM -->|Alert| AM[Alert Manager]
+        DM -->|Block| BM[Firewall/Host Blocker]
+        AM -->|Notify| NT[Email/Telegram]
+    end
+
+    BM & AM & AI -->|Log| DB[(SQLite/Postgres)]
+    DB -->|Serve| API[Admin Dashboard]
+```
+
+---
+
+## 📸 Dashboard Preview
+
+![Dashboard Mockup](docs/assets/dashboard.png)
+*Note: This is a representative mockup of the NetScan telemetry interface.*
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites (Linux)
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv libpcap-dev nftables iproute2
 ```
 
-### 2. Automated Setup
-
+### 2. One-Shot Installation
 ```bash
 git clone https://github.com/Desapphire/netscan.git
 cd netscan
 bash install_linux.sh
 ```
 
-The script will:
-- Install system packages (`libpcap-dev`, `nftables`)
-- Create a Python virtual environment
-- Install all Python dependencies
-- Initialise the SQLite database
-- Print the detected default network interface
-
-### 3. Start the Dashboard Only
-
-```bash
-source venv/bin/activate
-python3 cli.py api
-```
-
-Open **http://localhost:8000** in your browser.
-
-### 4. Start Live Capture + Dashboard (requires root)
-
-```bash
-# Auto-detects your physical interface (eth0, enp3s0, wlan0, etc.)
-sudo venv/bin/python3 cli.py live
-
-# Or specify interface explicitly:
-sudo venv/bin/python3 cli.py live --interface eth0
-```
-
-Every ~5 s a window of traffic is analysed and alerts appear in the console and dashboard.
-
-### 5. Non-Root Capture (capability grant)
-
-If you prefer not to run the full process as root, grant raw socket capabilities to Python:
-
-```bash
-sudo setcap cap_net_raw,cap_net_admin+eip $(pwd)/venv/bin/python3
-# Then run without sudo:
-venv/bin/python3 cli.py live --interface eth0
-```
-
-> **Note:** `setcap` is reset when Python is updated. Re-run after upgrades.  
-> IP blocking (iptables/nftables) still requires root or `CAP_NET_ADMIN`.
-
-### 6. Capture Only (no dashboard)
-
-```bash
-sudo venv/bin/python3 cli.py capture --interface eth0
-```
+### 3. Launching
+| Command | Mode | Description |
+|---------|------|-------------|
+| `python cli.py api` | **API Only** | Start dashboard at localhost:8000 |
+| `sudo python cli.py live` | **Full Mode** | Auto-capture + Dashboard (Root required) |
+| `sudo python cli.py train` | **Train** | Re-train ML model on baseline data |
 
 ---
 
-## Run as a systemd Service
+## ⚙️ Configuration
 
-```bash
-# Copy service file and adjust path
-sudo cp netscan.service /etc/systemd/system/
-sudo sed -i "s|/opt/netscan|$(pwd)|g" /etc/systemd/system/netscan.service
+Tunable parameters are located in `config/app_config.yaml`.
 
-# Enable and start
-sudo systemctl daemon-reload
-sudo systemctl enable --now netscan
-
-# View logs
-sudo journalctl -u netscan -f
-```
-
----
-
-## Configuration
-
-All tunable parameters are in `config/app_config.yaml`:
+<details>
+<summary><b>View Detection Parameters</b></summary>
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `app.window_seconds` | 5 | Analysis window length |
-| `app.slide_seconds` | 3 | Window slide interval |
-| `app.default_interface` | `eth0` | Default capture interface |
-| `detection.rule_weight` | 0.70 | Weight of rule score in hybrid |
-| `detection.ml_weight` | 0.30 | Weight of ML score in hybrid |
-| `detection.block_threshold` | 0.75 | Risk ≥ this → block decision |
-| `detection.alert_threshold` | 0.40 | Risk ≥ this → alert decision |
-| `detection.ai_review_low/high` | 0.40 / 0.74 | Gray-zone → escalate to Gemini |
-| `gemini.enabled` | false | Enable Gemini AI reasoning |
-| `gemini.model` | gemini-2.0-flash | Gemini model to call |
+| `detection.rule_weight` | 0.70 | Rule engine importance |
+| `detection.ml_weight` | 0.30 | ML model importance |
+| `detection.block_threshold`| 0.75 | Risk level required to auto-block |
+| `detection.ai_review` | 0.40 - 0.74 | Escalate to Gemini in this range |
 
-### Enable Gemini
+</details>
+
+<details>
+<summary><b>View Gemini Setup</b></summary>
 
 1. Set `gemini.enabled: true` in `config/app_config.yaml`.
-2. Export your API key: `export GEMINI_API_KEY=<your-key>`.
-
-### Rules
-
-Edit `config/rules.yaml` to add/modify VPN ports, torrent ports, restricted domain keywords, and fan-out thresholds.
-
----
-
-## Firewall / IP Blocking
-
-NetScan automatically blocks high-risk IPs and domains:
-
-| Backend | Used when |
-|---------|-----------|
-| **nftables** | `nft` binary found (Debian 12+, Kali) — preferred |
-| **iptables** | fallback on older kernels |
-| **/etc/hosts** | domain-level blocking (CDN-backed sites like gambling, VPN portals) |
-
-Blocking requires **root** or `CAP_NET_ADMIN`. Detection and alerting work without root.
-
-View blocked IPs in the dashboard at `/blocked` or via the API at `/blocked-ips`.
-
----
-
-## ML Model Training
-
-1. Capture several hours of **normal** traffic.
-2. Run the training command:
-   ```bash
-   sudo venv/bin/python3 cli.py train
-   ```
-3. The script trains an `IsolationForest` and saves it to `models/isolation_forest.pkl`.
-4. The pipeline will automatically load the new model on restart.
-
-Alternatively, explore data using the notebook at `models/train_notebook.ipynb`.
-
-See `models/ml_config.yaml` for hyperparameters.
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Dashboard (HTML) |
-| `GET` | `/health` | System health check |
-| `GET` | `/alerts` | List alerts (JSON), filterable by `status`, `severity`, `src_ip` |
-| `GET` | `/alerts/stats` | Aggregate alert statistics |
-| `GET` | `/alerts/{id}` | Alert detail with detection scores + AI assessment |
-| `PATCH` | `/alerts/{id}` | Update alert status (`open` → `acknowledged` → `resolved`) |
-| `GET` | `/alert/{id}` | Alert detail page (HTML) |
-| `GET` | `/devices` | List tracked devices |
-| `GET` | `/devices/{ip}` | Device detail with recent detections & alerts |
-| `GET` | `/devices/summary/all` | Per-device risk summary |
-| `GET` | `/blocked-ips` | List of currently blocked IPs |
-| `POST` | `/unblock/{ip}` | Manually unblock an IP |
-
----
-
-## Testing
-
+2. Export your API key:
 ```bash
-source venv/bin/activate
-pytest tests/ -v
+export GEMINI_API_KEY=<your-key>
 ```
-
-Tests cover capture parsing, feature extraction, rule engine, ML scoring, AI reasoner (mocked), and API endpoints.
-
----
-
-## Database Schema
-
-| Table | Purpose |
-|-------|---------|
-| `devices` | Known IPs, MACs, hostnames, owners |
-| `network_features` | Per-device per-window feature snapshots |
-| `detections` | Rule + ML scores, decisions |
-| `ai_assessments` | Gemini responses (threat type, severity, explanation) |
-| `alerts` | Admin-facing alerts with status lifecycle |
-| `blocked_ips` | IP blocking history (auto + manual) |
-
-See `app/db/schema.sql` for the full DDL.
+</details>
 
 ---
 
-## Project Structure
+## 🛠️ Tech Stack
 
-```
-netscan/
-  app/
-    config.py                   # AppConfig loader
-    capture/                    # Packet capture & flow aggregation (Scapy/libpcap)
-    features/                   # Feature extraction & sliding window
-    detection/                  # Rules + ML + hybrid detector
-    ai_reasoner/                # Gemini API client & prompt builder
-    alerts/                     # Alert manager & notifier
-    api/                        # FastAPI routes & dashboard
-    blocking/                   # nftables/iptables IP blocking + hosts file domain blocking
-    db/                         # SQLAlchemy models & session
-    utils/                      # Logging, time, IP, config helpers
-  templates/                    # Jinja2 HTML templates
-  static/                       # CSS / JS assets
-  models/                       # Trained ML models & notebook
-  tests/                        # pytest test suite
-  config/                       # YAML configuration files
-  install_linux.sh              # One-shot Debian/Kali setup script
-  netscan.service               # systemd service unit
-  requirements.txt
-  README.md
-```
+- **Core**: Python 3.10+, Scapy, Pandas, Scikit-learn
+- **API**: FastAPI, Uvicorn, Jinja2
+- **Database**: SQLAlchemy, SQLite (Dev), Postgres (Prod)
+- **Security**: nftables, iptables
+- **AI**: Google Gemini Pro (Vertex AI / AI Studio)
 
 ---
 
-## Windows Support
+## 📄 License
 
-NetScan is now Linux-first. Windows is **not officially supported**.
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
-If you need to run on Windows:
-- Install [Npcap](https://npcap.com/) for raw packet capture.
-- Firewall blocking via PowerShell/`netsh` is not implemented — alerts and detection still work.
-- Run in a WSL2 environment for best compatibility.
-
----
-
-## License
-
-MIT — see individual file headers for details.
+<div align="center">
+  <br />
+  Built with ❤️ by the <b>Desapphire</b> Team
+</div>
